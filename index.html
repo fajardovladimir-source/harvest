@@ -5,11 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HarvestGo — Farm to Table Marketplace</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<!-- Leaflet.js for the map (no API key needed) -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Supabase -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+  // ─── PASTE YOUR FIREBASE CONFIG HERE ───
+  // Go to console.firebase.google.com → Create project → Web app → Copy config
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  window._db  = getFirestore(app);
+  window._auth = getAuth(app);
+  window._firebase = { collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot, orderBy, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged };
+  window._firebaseReady = true;
+  document.dispatchEvent(new Event('firebaseReady'));
+</script>
 <style>
   :root {
     --forest: #0d2b1f;
@@ -60,10 +79,6 @@
   .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(42,107,71,0.5); }
   .btn-outline { background: transparent; color: var(--white); border: 1.5px solid rgba(255,255,255,0.35); padding: 14px 34px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
   .btn-outline:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.6); }
-  .landing-badges { display: flex; gap: 24px; margin-top: 52px; }
-  .badge { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .badge-num { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--gold-light); }
-  .badge-label { font-size: 11px; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 1px; }
 
   /* ─── AUTH ─── */
   #screen-auth { background: var(--forest); align-items: center; justify-content: center; padding: 24px; position: relative; }
@@ -100,20 +115,23 @@
   .err-text { font-size: 12px; color: var(--red); margin-top: 4px; display: none; }
   .err-text.show { display: block; }
 
+  /* ─── MAP PICKER ─── */
+  .map-container { width: 100%; height: 280px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); overflow: hidden; position: relative; background: #e8f4e8; }
+  .map-container iframe { width: 100%; height: 100%; border: none; }
+  .map-pin-display { margin-top: 8px; padding: 10px 14px; background: var(--pale); border-radius: var(--radius-sm); font-size: 13px; color: var(--text-mid); display: flex; align-items: center; gap: 8px; }
+  .map-pin-display span { flex: 1; }
+  .province-select { width: 100%; }
+  .city-select { width: 100%; }
+
   /* ─── MODAL ─── */
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(13,43,31,0.65); backdrop-filter: blur(6px); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
   .modal-overlay.open { display: flex; }
-  .modal-card { background: var(--white); border-radius: var(--radius-lg); padding: 36px 32px; max-width: 500px; width: 100%; box-shadow: var(--shadow-lg); animation: fadeUp 0.35s ease; position: relative; max-height: 90vh; overflow-y: auto; }
+  .modal-card { background: var(--white); border-radius: var(--radius-lg); padding: 36px 32px; max-width: 440px; width: 100%; box-shadow: var(--shadow-lg); animation: fadeUp 0.35s ease; position: relative; max-height: 90vh; overflow-y: auto; }
   .modal-close { position: absolute; top: 16px; right: 18px; background: none; border: none; font-size: 22px; color: var(--text-ghost); cursor: pointer; line-height: 1; transition: color 0.2s; }
   .modal-close:hover { color: var(--text-dark); }
   .modal-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
   .modal-sub { font-size: 13px; color: var(--text-soft); margin-bottom: 24px; }
-
-  /* ─── MAP ─── */
-  #farm-map, #location-view-map { height: 280px; border-radius: var(--radius-sm); overflow: hidden; border: 1.5px solid var(--border-strong); margin-bottom: 12px; }
-  .map-instructions { background: var(--pale); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: var(--text-mid); margin-bottom: 12px; }
-  .map-instructions strong { color: var(--forest); }
-  .location-display { display: flex; align-items: center; gap: 10px; background: var(--pale); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: var(--text-mid); margin-top: 8px; }
+  .gcash-logo { background: linear-gradient(135deg, #0075FF 0%, #00C2FF 100%); color: white; font-weight: 700; font-size: 15px; padding: 10px 20px; border-radius: 8px; display: inline-block; margin-bottom: 20px; letter-spacing: 0.5px; }
 
   /* ─── APP HEADER ─── */
   #screen-app { background: var(--cream); }
@@ -342,36 +360,39 @@
   .qty-btn:hover { background: var(--pale); }
   .qty-num { font-size: 14px; font-weight: 600; min-width: 20px; text-align: center; }
   .cart-footer { padding: 18px 20px; border-top: 1px solid var(--border); }
-  .cart-total-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 14px; color: var(--text-mid); }
-  .cart-total-row.grand { font-size: 16px; font-weight: 700; color: var(--text-dark); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); margin-bottom: 14px; }
+  .cart-total { display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; color: var(--text-dark); margin-bottom: 16px; }
 
-  /* ─── SHOPEE-STYLE CHECKOUT ─── */
-  .checkout-section { margin-bottom: 16px; }
-  .checkout-section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-ghost); margin-bottom: 8px; display: block; }
-  .address-display { display: flex; align-items: flex-start; gap: 10px; background: var(--pale); border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13.5px; color: var(--text-mid); }
-  .address-display .addr-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-  .address-display .addr-info { flex: 1; }
-  .address-display .addr-name { font-weight: 600; color: var(--text-dark); font-size: 14px; }
-  .address-change-btn { font-size: 12px; color: var(--sage); font-weight: 600; cursor: pointer; text-decoration: underline; margin-top: 4px; display: inline-block; }
-  .address-missing { background: rgba(229,62,62,0.07); border: 1.5px solid rgba(229,62,62,0.3); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13px; color: #c53030; display: flex; align-items: center; gap: 8px; }
-  .pay-method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .pay-method-card { border: 2px solid var(--border-strong); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; transition: all 0.2s; background: var(--cream); display: flex; align-items: center; gap: 10px; }
-  .pay-method-card:hover { border-color: var(--sage); background: var(--pale); }
-  .pay-method-card.selected { border-color: var(--forest); background: var(--pale); }
-  .pay-method-card.selected .pay-method-check { opacity: 1; }
-  .pay-method-icon { font-size: 20px; }
-  .pay-method-info { flex: 1; }
-  .pay-method-name { font-size: 13px; font-weight: 600; color: var(--text-dark); }
-  .pay-method-desc { font-size: 11px; color: var(--text-ghost); margin-top: 1px; }
-  .pay-method-check { width: 18px; height: 18px; border-radius: 50%; background: var(--forest); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; flex-shrink: 0; }
-  .pay-method-check::after { content: '✓'; font-size: 10px; color: white; font-weight: 700; }
+  /* ─── SHOPEE-STYLE PAYMENT ─── */
+  .payment-section { margin-bottom: 16px; }
+  .payment-section-title { font-size: 13px; font-weight: 700; color: var(--text-mid); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .payment-opts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pay-opt-card { padding: 10px 12px; border-radius: 10px; border: 2px solid var(--border-strong); background: var(--cream); cursor: pointer; transition: all 0.2s; text-align: center; }
+  .pay-opt-card.selected { background: var(--forest); border-color: var(--forest); color: white; }
+  .pay-opt-card.selected .pay-icon { filter: brightness(10); }
+  .pay-opt-icon { font-size: 20px; margin-bottom: 4px; }
+  .pay-opt-name { font-size: 12px; font-weight: 600; color: var(--text-dark); }
+  .pay-opt-card.selected .pay-opt-name { color: white; }
+  .pay-opt-desc { font-size: 10px; color: var(--text-ghost); margin-top: 2px; }
+  .pay-opt-card.selected .pay-opt-desc { color: rgba(255,255,255,0.7); }
+  .cod-badge { display: inline-block; background: rgba(201,168,76,0.15); color: #8a6f1e; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-top: 4px; }
+  .delivery-address-box { background: var(--pale); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; border: 1px solid var(--border-strong); }
+  .delivery-address-box .addr-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-ghost); margin-bottom: 6px; }
+  .delivery-address-box .addr-value { font-size: 13.5px; color: var(--text-dark); font-weight: 500; }
+  .delivery-address-box .addr-missing { font-size: 13px; color: var(--red); font-weight: 500; cursor: pointer; text-decoration: underline; }
 
   /* ─── PROFILE ─── */
   .profile-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 28px; box-shadow: var(--shadow-sm); }
 
+  /* ─── ADDRESS REQUIRED BANNER ─── */
+  .address-banner { background: rgba(229,62,62,0.08); border: 1.5px solid rgba(229,62,62,0.3); border-radius: var(--radius-sm); padding: 14px 18px; margin: 0 24px 16px; display: flex; align-items: center; gap: 12px; max-width: calc(1200px - 48px); }
+  .address-banner-icon { font-size: 20px; }
+  .address-banner-text { flex: 1; font-size: 13.5px; color: #c53030; }
+  .address-banner-text strong { display: block; margin-bottom: 2px; }
+  .address-banner-btn { padding: 7px 16px; background: #c53030; color: white; border: none; border-radius: 50px; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: 'DM Sans', sans-serif; }
+
   /* ─── TOAST ─── */
-  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: var(--forest); color: white; padding: 12px 22px; border-radius: 50px; font-size: 13.5px; font-weight: 500; box-shadow: var(--shadow-md); z-index: 9999; display: none; white-space: nowrap; }
-  .toast.show { display: flex; align-items: center; gap: 8px; animation: toastIn 0.3s ease; }
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: var(--forest); color: white; padding: 12px 22px; border-radius: 50px; font-size: 13.5px; font-weight: 500; box-shadow: var(--shadow-md); z-index: 9999; display: none; white-space: nowrap; animation: toastIn 0.3s ease; }
+  .toast.show { display: flex; align-items: center; gap: 8px; }
   @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 
   /* ─── UTILS ─── */
@@ -388,14 +409,12 @@
   .mt-24 { margin-top: 24px; }
 
   /* ─── LOADING ─── */
-  .db-loading { position: fixed; inset: 0; background: var(--forest); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; color: white; }
-  .db-loading .spin { width: 48px; height: 48px; border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px; }
-  .db-loading p { font-size: 15px; color: rgba(255,255,255,0.7); }
+  .loading-screen { position: fixed; inset: 0; background: var(--forest); display: flex; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.4s; }
+  .loading-screen.hidden { opacity: 0; pointer-events: none; }
+  .loading-inner { text-align: center; color: white; }
+  .loading-inner .spin { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ─── DB CONFIG BANNER ─── */
-  .db-config-banner { position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a2e; color: #e2c776; padding: 12px 20px; font-size: 13px; font-family: 'DM Mono', monospace; z-index: 9998; display: flex; align-items: center; gap: 12px; border-top: 2px solid #c9a84c; }
-  .db-config-banner strong { color: white; }
+  .loading-inner p { font-size: 14px; color: rgba(255,255,255,0.5); }
 
   @media (max-width: 640px) {
     .auth-card { padding: 32px 22px; }
@@ -406,21 +425,23 @@
     .msg-sidebar { width: 100%; }
     .msg-layout { flex-direction: column; }
     .cart-drawer { width: 100%; }
-    .pay-method-grid { grid-template-columns: 1fr; }
+    .payment-opts-grid { grid-template-columns: 1fr 1fr; }
   }
 </style>
 </head>
 <body>
 
-<!-- LOADING SCREEN -->
-<div class="db-loading" id="db-loading">
-  <div class="logo-mark" style="margin-bottom:20px">🌿</div>
-  <div class="spin"></div>
-   <p id="status">Connecting to database...</p>
+<!-- Loading -->
+<div class="loading-screen" id="loading-screen">
+  <div class="loading-inner">
+    <div class="spin"></div>
+    <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;margin-bottom:8px">HarvestGo</div>
+    <p>Connecting to farm...</p>
+  </div>
 </div>
 
 <!-- ══════════════ LANDING ══════════════ -->
-<div id="screen-landing" class="screen">
+<div id="screen-landing" class="screen active">
   <div class="landing-bg"><div class="landing-grid"></div></div>
   <div class="landing-center">
     <div class="logo-mark">🌿</div>
@@ -429,11 +450,6 @@
     <div class="landing-btns">
       <button class="btn-primary" onclick="goToAuth('login')">Sign In</button>
       <button class="btn-outline" onclick="goToAuth('register')">Create Account</button>
-    </div>
-    <div class="landing-badges">
-      <div class="badge"><span class="badge-num" id="stat-farmers">—</span><span class="badge-label">Farmers</span></div>
-      <div class="badge"><span class="badge-num" id="stat-consumers">—</span><span class="badge-label">Customers</span></div>
-      <div class="badge"><span class="badge-num">98%</span><span class="badge-label">Satisfaction</span></div>
     </div>
   </div>
 </div>
@@ -472,7 +488,7 @@
         </div>
         <div class="err-text" id="err-login-pass">Incorrect email or password.</div>
       </div>
-      <button class="btn-full" id="login-btn" onclick="handleLogin()">Sign In</button>
+      <button class="btn-full" onclick="handleLogin()">Sign In</button>
       <p class="auth-switch">Don't have an account? <a onclick="switchForm('register')">Create one</a></p>
     </div>
 
@@ -506,7 +522,7 @@
       <div class="form-group">
         <label class="form-label">Password</label>
         <div class="pass-wrap">
-          <input type="password" class="form-input" id="reg-pass" placeholder="At least 8 characters" autocomplete="new-password">
+          <input type="password" class="form-input" id="reg-pass" placeholder="Create a strong password (min 8 chars)" autocomplete="new-password">
           <button class="pass-eye" onclick="togglePass('reg-pass',this)" tabindex="-1">
             <svg id="eye-reg-pass-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg id="eye-reg-pass-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -524,7 +540,7 @@
         </div>
         <div class="err-text" id="err-reg-pass2">Passwords do not match.</div>
       </div>
-      <button class="btn-full" id="reg-btn" onclick="handleRegister()">Create Account</button>
+      <button class="btn-full" onclick="handleRegister()">Create Account</button>
       <p class="auth-switch">Already have an account? <a onclick="switchForm('login')">Sign in</a></p>
     </div>
   </div>
@@ -560,6 +576,14 @@
         <button onclick="filterProducts()">Search</button>
       </div>
     </div>
+    <div id="address-banner-shop" style="display:none" class="address-banner">
+      <div class="address-banner-icon">📍</div>
+      <div class="address-banner-text">
+        <strong>Delivery address required</strong>
+        Please set your delivery address in your profile before shopping.
+      </div>
+      <button class="address-banner-btn" onclick="showPage('profile')">Set Address</button>
+    </div>
     <div class="filter-row">
       <button class="filter-chip active" onclick="filterCat('all',this)">All</button>
       <button class="filter-chip" onclick="filterCat('fruits',this)">Fruits</button>
@@ -567,9 +591,7 @@
       <button class="filter-chip" onclick="filterCat('leafy',this)">Leafy Greens</button>
       <button class="filter-chip" onclick="filterCat('root',this)">Root Crops</button>
     </div>
-    <div class="products-grid" id="products-grid">
-      <div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🌾</div><p>Loading products...</p></div>
-    </div>
+    <div class="products-grid" id="products-grid"></div>
   </div>
 
   <!-- ORDERS -->
@@ -588,6 +610,10 @@
       <div id="wallet-low-notice" class="notice-red" style="display:none">
         <strong>Low Wallet Balance:</strong> You need at least ₱50 to post a listing. <a onclick="showPage('wallet')" style="color:#c53030;cursor:pointer;text-decoration:underline">Top up your wallet</a>.
       </div>
+      <div id="location-required-notice" class="notice-red" style="display:none">
+        <strong>Farm Location Required:</strong> Please set your farm location in your profile before listing a product.
+        <a onclick="showPage('profile')" style="color:#c53030;cursor:pointer;text-decoration:underline">Set Location</a>.
+      </div>
       <div class="sell-form-card">
         <h3>New Listing</h3>
         <div class="form-group">
@@ -602,7 +628,7 @@
             <button class="img-remove-btn" id="img-remove-btn" style="display:none" onclick="removeImg(event)" title="Remove image">✕</button>
           </div>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="emoji-section">
           <label class="form-label">Or choose an icon</label>
           <div class="emoji-picker" id="emoji-picker">
             <div class="emoji-opt selected" onclick="selectEmoji(this,'🍅')">🍅</div>
@@ -623,24 +649,6 @@
             <div class="emoji-opt" onclick="selectEmoji(this,'🧄')">🧄</div>
           </div>
         </div>
-
-        <!-- FARM LOCATION MAP -->
-        <div class="form-group">
-          <label class="form-label">📍 Farm Location <span style="color:var(--red);font-weight:600">*Required</span></label>
-          <div class="map-instructions">
-            <strong>Click on the map</strong> to drop a pin at your farm's location (Philippines only). You can drag the pin to adjust.
-          </div>
-          <div id="farm-map"></div>
-          <div class="location-display" id="farm-location-display" style="display:none">
-            <span>📍</span>
-            <div>
-              <div id="farm-lat-lng" style="font-weight:600;font-size:13px;color:var(--forest)"></div>
-              <div id="farm-address-display" style="font-size:12px;color:var(--text-ghost);margin-top:2px"></div>
-            </div>
-          </div>
-          <div class="err-text" id="err-farm-location">Please drop a pin on your farm location before listing.</div>
-        </div>
-
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Product Name</label>
@@ -776,7 +784,7 @@
   <!-- PROFILE -->
   <div class="page" id="page-profile">
     <div class="section-header"><h2>My Profile</h2><span>Account settings</span></div>
-    <div style="max-width:520px;margin:0 auto;padding:0 24px 40px">
+    <div style="max-width:560px;margin:0 auto;padding:0 24px 40px">
       <div class="profile-card">
         <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px">
           <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--sage),var(--gold));display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:white" id="profile-avatar-big">U</div>
@@ -786,14 +794,84 @@
           </div>
         </div>
         <div class="form-group"><label class="form-label">Full Name</label><input type="text" class="form-input" id="profile-name-field"></div>
-        <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="profile-email-field" readonly style="opacity:0.6"></div>
+        <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="profile-email-field" readonly style="opacity:0.7"></div>
         <div class="form-group"><label class="form-label">Phone</label><input type="tel" class="form-input" id="profile-phone-field" placeholder="+63 9XX XXX XXXX"></div>
-        <div class="form-group">
-          <label class="form-label">🏠 Delivery Address <span style="color:var(--red);font-weight:600" id="address-required-tag">*Required to buy</span></label>
-          <input type="text" class="form-input" id="profile-address-field" placeholder="Street, Barangay, City, Province">
-          <div style="font-size:12px;color:var(--text-ghost);margin-top:5px">You must set an address before placing orders.</div>
+
+        <!-- Consumer: Delivery Address -->
+        <div id="consumer-address-section">
+          <div class="form-group">
+            <label class="form-label">Delivery Address <span style="color:var(--red);font-weight:700">*</span></label>
+            <input type="text" class="form-input" id="profile-address-field" placeholder="House No., Street, Barangay">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">City / Municipality</label>
+              <input type="text" class="form-input" id="profile-city-field" placeholder="e.g. Quezon City">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Province</label>
+              <select class="form-input" id="profile-province-field">
+                <option value="">Select Province</option>
+                <option>Metro Manila</option><option>Abra</option><option>Agusan del Norte</option><option>Agusan del Sur</option><option>Aklan</option><option>Albay</option><option>Antique</option><option>Apayao</option><option>Aurora</option><option>Basilan</option><option>Bataan</option><option>Batanes</option><option>Batangas</option><option>Benguet</option><option>Biliran</option><option>Bohol</option><option>Bukidnon</option><option>Bulacan</option><option>Cagayan</option><option>Camarines Norte</option><option>Camarines Sur</option><option>Camiguin</option><option>Capiz</option><option>Catanduanes</option><option>Cavite</option><option>Cebu</option><option>Cotabato</option><option>Davao de Oro</option><option>Davao del Norte</option><option>Davao del Sur</option><option>Davao Occidental</option><option>Davao Oriental</option><option>Dinagat Islands</option><option>Eastern Samar</option><option>Guimaras</option><option>Ifugao</option><option>Ilocos Norte</option><option>Ilocos Sur</option><option>Iloilo</option><option>Isabela</option><option>Kalinga</option><option>La Union</option><option>Laguna</option><option>Lanao del Norte</option><option>Lanao del Sur</option><option>Leyte</option><option>Maguindanao</option><option>Marinduque</option><option>Masbate</option><option>Misamis Occidental</option><option>Misamis Oriental</option><option>Mountain Province</option><option>Negros Occidental</option><option>Negros Oriental</option><option>Northern Samar</option><option>Nueva Ecija</option><option>Nueva Vizcaya</option><option>Occidental Mindoro</option><option>Oriental Mindoro</option><option>Palawan</option><option>Pampanga</option><option>Pangasinan</option><option>Quezon</option><option>Quirino</option><option>Rizal</option><option>Romblon</option><option>Samar</option><option>Sarangani</option><option>Siquijor</option><option>Sorsogon</option><option>South Cotabato</option><option>Southern Leyte</option><option>Sultan Kudarat</option><option>Sulu</option><option>Surigao del Norte</option><option>Surigao del Sur</option><option>Tarlac</option><option>Tawi-Tawi</option><option>Zambales</option><option>Zamboanga del Norte</option><option>Zamboanga del Sur</option><option>Zamboanga Sibugay</option>
+              </select>
+            </div>
+          </div>
         </div>
-        <button class="btn-full" onclick="saveProfile()">Save Changes</button>
+
+        <!-- Farmer: Farm Location with Map -->
+        <div id="farmer-location-section" style="display:none">
+          <div class="form-group">
+            <label class="form-label">Farm Address <span style="color:var(--red);font-weight:700">*</span></label>
+            <input type="text" class="form-input" id="farm-address-field" placeholder="Farm address / sitio / barangay">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Municipality / City</label>
+              <input type="text" class="form-input" id="farm-city-field" placeholder="e.g. Benguet">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Province</label>
+              <select class="form-input" id="farm-province-field">
+                <option value="">Select Province</option>
+                <option>Metro Manila</option><option>Abra</option><option>Agusan del Norte</option><option>Agusan del Sur</option><option>Aklan</option><option>Albay</option><option>Antique</option><option>Apayao</option><option>Aurora</option><option>Basilan</option><option>Bataan</option><option>Batanes</option><option>Batangas</option><option>Benguet</option><option>Biliran</option><option>Bohol</option><option>Bukidnon</option><option>Bulacan</option><option>Cagayan</option><option>Camarines Norte</option><option>Camarines Sur</option><option>Camiguin</option><option>Capiz</option><option>Catanduanes</option><option>Cavite</option><option>Cebu</option><option>Cotabato</option><option>Davao de Oro</option><option>Davao del Norte</option><option>Davao del Sur</option><option>Davao Occidental</option><option>Davao Oriental</option><option>Dinagat Islands</option><option>Eastern Samar</option><option>Guimaras</option><option>Ifugao</option><option>Ilocos Norte</option><option>Ilocos Sur</option><option>Iloilo</option><option>Isabela</option><option>Kalinga</option><option>La Union</option><option>Laguna</option><option>Lanao del Norte</option><option>Lanao del Sur</option><option>Leyte</option><option>Maguindanao</option><option>Marinduque</option><option>Masbate</option><option>Misamis Occidental</option><option>Misamis Oriental</option><option>Mountain Province</option><option>Negros Occidental</option><option>Negros Oriental</option><option>Northern Samar</option><option>Nueva Ecija</option><option>Nueva Vizcaya</option><option>Occidental Mindoro</option><option>Oriental Mindoro</option><option>Palawan</option><option>Pampanga</option><option>Pangasinan</option><option>Quezon</option><option>Quirino</option><option>Rizal</option><option>Romblon</option><option>Samar</option><option>Sarangani</option><option>Siquijor</option><option>Sorsogon</option><option>South Cotabato</option><option>Southern Leyte</option><option>Sultan Kudarat</option><option>Sulu</option><option>Surigao del Norte</option><option>Surigao del Sur</option><option>Tarlac</option><option>Tawi-Tawi</option><option>Zambales</option><option>Zamboanga del Norte</option><option>Zamboanga del Sur</option><option>Zamboanga Sibugay</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">📍 Pin Your Farm on the Map <span style="color:var(--red);font-weight:700">*</span></label>
+            <p style="font-size:12px;color:var(--text-soft);margin-bottom:8px">Click anywhere on the map to drop a pin at your farm's location in the Philippines.</p>
+            <div class="map-container" id="farm-map-container">
+              <iframe
+                id="farm-map-iframe"
+                src="https://www.openstreetmap.org/export/embed.html?bbox=116.928,4.587,126.537,20.940&layer=mapnik&marker=12.8797,121.7740"
+                style="width:100%;height:280px;border:none;"
+                title="Philippines Map">
+              </iframe>
+            </div>
+            <div style="background:var(--pale);border-radius:8px;padding:10px 14px;margin-top:8px;font-size:12.5px;color:var(--text-mid)">
+              <strong>📌 How to set your pin:</strong> Enter your province above → the map will show your area. Then type in the coordinates below or use the search to find your exact farm location.
+            </div>
+            <div class="form-row" style="margin-top:10px">
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Latitude</label>
+                <input type="number" class="form-input" id="farm-lat" placeholder="e.g. 14.5995" step="0.0001" oninput="updateMapPin()">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Longitude</label>
+                <input type="number" class="form-input" id="farm-lng" placeholder="e.g. 120.9842" step="0.0001" oninput="updateMapPin()">
+              </div>
+            </div>
+            <button type="button" onclick="useCurrentLocation()" style="margin-top:8px;padding:8px 16px;border:1.5px solid var(--border-strong);background:var(--cream);border-radius:50px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text-mid);display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='var(--pale)'" onmouseout="this.style.background='var(--cream)'">
+              📡 Use My Current Location
+            </button>
+            <div id="map-pin-display" class="map-pin-display" style="display:none">
+              <span>📍</span>
+              <span id="map-pin-text">No pin set yet</span>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-full" onclick="saveProfile()">Save Profile</button>
         <button style="width:100%;margin-top:12px;padding:13px;background:none;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;color:var(--text-mid);transition:background 0.2s" onmouseover="this.style.background='var(--pale)'" onmouseout="this.style.background='none'" onclick="logout()">Sign Out</button>
       </div>
     </div>
@@ -822,11 +900,45 @@
 <div class="drawer-overlay" id="drawer-overlay" onclick="toggleCart()"></div>
 <div class="cart-drawer" id="cart-drawer">
   <div class="cart-header">
-    <h3>Your Basket 🛒</h3>
+    <h3>Your Basket</h3>
     <button onclick="toggleCart()">✕</button>
   </div>
   <div class="cart-items" id="cart-items-list"></div>
-  <div class="cart-footer" id="cart-footer"></div>
+  <div class="cart-footer">
+    <!-- Delivery Address -->
+    <div class="delivery-address-box">
+      <div class="addr-label">📍 Delivery To</div>
+      <div id="cart-addr-display"></div>
+    </div>
+    <div class="cart-total"><span>Total</span><span id="cart-total-display">₱0.00</span></div>
+    <!-- Shopee-style payment selection -->
+    <div class="payment-section">
+      <div class="payment-section-title">Payment Method</div>
+      <div class="payment-opts-grid">
+        <div class="pay-opt-card selected" onclick="selectPay(this)" data-method="GCash">
+          <div class="pay-opt-icon">💙</div>
+          <div class="pay-opt-name">GCash</div>
+          <div class="pay-opt-desc">Fast &amp; Secure</div>
+        </div>
+        <div class="pay-opt-card" onclick="selectPay(this)" data-method="Maya">
+          <div class="pay-opt-icon">🟢</div>
+          <div class="pay-opt-name">Maya</div>
+          <div class="pay-opt-desc">Digital Wallet</div>
+        </div>
+        <div class="pay-opt-card" onclick="selectPay(this)" data-method="Online Banking">
+          <div class="pay-opt-icon">🏦</div>
+          <div class="pay-opt-name">Online Banking</div>
+          <div class="pay-opt-desc">BPI, BDO, etc.</div>
+        </div>
+        <div class="pay-opt-card" onclick="selectPay(this)" data-method="COD">
+          <div class="pay-opt-icon">💵</div>
+          <div class="pay-opt-name">Cash on Delivery</div>
+          <div class="pay-opt-desc">Pay when received</div>
+        </div>
+      </div>
+    </div>
+    <button class="btn-full" onclick="checkout()">Place Order</button>
+  </div>
 </div>
 
 <!-- ══════════════ TOP UP MODAL ══════════════ -->
@@ -841,7 +953,7 @@
       <div class="topup-step" id="tstep-3">3 · Confirm</div>
     </div>
     <div class="topup-step-panel active" id="topup-panel-1">
-      <div style="display:inline-block;background:linear-gradient(135deg,#0075FF,#00C2FF);color:white;font-weight:700;font-size:15px;padding:10px 20px;border-radius:8px;margin-bottom:20px;letter-spacing:0.5px">GCash</div>
+      <div class="gcash-logo">GCash</div>
       <div class="form-group">
         <label class="form-label">Your GCash Number</label>
         <input type="tel" class="form-input" id="gcash-num" placeholder="+63 9XX XXX XXXX">
@@ -900,32 +1012,28 @@
     <div class="modal-title">Pay for Order</div>
     <p class="modal-sub" id="pay-modal-sub">Complete your payment to confirm the order.</p>
     <div id="pay-modal-content" style="margin-bottom:20px"></div>
-    <div class="checkout-section">
-      <span class="checkout-section-label">Payment Method</span>
-      <div class="pay-method-grid" id="pay-modal-opts">
-        <div class="pay-method-card selected" onclick="selectPayModal(this,'GCash')">
-          <div class="pay-method-icon">💚</div>
-          <div class="pay-method-info"><div class="pay-method-name">GCash</div><div class="pay-method-desc">Send via GCash app</div></div>
-          <div class="pay-method-check"></div>
+    <div class="payment-section" style="margin-bottom:18px">
+      <div class="payment-section-title">Choose Payment Method</div>
+      <div class="payment-opts-grid" id="pay-modal-opts">
+        <div class="pay-opt-card selected" onclick="selectPayModal(this)" data-method="GCash">
+          <div class="pay-opt-icon">💙</div>
+          <div class="pay-opt-name">GCash</div>
         </div>
-        <div class="pay-method-card" onclick="selectPayModal(this,'Maya')">
-          <div class="pay-method-icon">💜</div>
-          <div class="pay-method-info"><div class="pay-method-name">Maya</div><div class="pay-method-desc">PayMaya transfer</div></div>
-          <div class="pay-method-check"></div>
+        <div class="pay-opt-card" onclick="selectPayModal(this)" data-method="Maya">
+          <div class="pay-opt-icon">🟢</div>
+          <div class="pay-opt-name">Maya</div>
         </div>
-        <div class="pay-method-card" onclick="selectPayModal(this,'Online Banking')">
-          <div class="pay-method-icon">🏦</div>
-          <div class="pay-method-info"><div class="pay-method-name">Online Banking</div><div class="pay-method-desc">BDO, BPI, UnionBank</div></div>
-          <div class="pay-method-check"></div>
+        <div class="pay-opt-card" onclick="selectPayModal(this)" data-method="Online Banking">
+          <div class="pay-opt-icon">🏦</div>
+          <div class="pay-opt-name">Online Banking</div>
         </div>
-        <div class="pay-method-card" onclick="selectPayModal(this,'COD')">
-          <div class="pay-method-icon">💵</div>
-          <div class="pay-method-info"><div class="pay-method-name">Cash on Delivery</div><div class="pay-method-desc">Pay when you receive</div></div>
-          <div class="pay-method-check"></div>
+        <div class="pay-opt-card" onclick="selectPayModal(this)" data-method="COD">
+          <div class="pay-opt-icon">💵</div>
+          <div class="pay-opt-name">Cash on Delivery</div>
         </div>
       </div>
     </div>
-    <button class="btn-full mt-16" id="pay-modal-btn" onclick="doPayOrder()">Confirm Payment</button>
+    <button class="btn-full" id="pay-modal-btn" onclick="doPayOrder()">Confirm Payment</button>
   </div>
 </div>
 
@@ -938,20 +1046,10 @@
     <div class="contact-item" style="padding:12px 0"><div class="contact-icon">📞</div><div><div style="font-size:12px;color:var(--text-ghost);margin-bottom:2px">Call</div><a id="cmodal-call" href="#" style="color:var(--sage);font-weight:500;text-decoration:none"></a></div></div>
     <div class="contact-item" style="padding:12px 0"><div class="contact-icon">💬</div><div><div style="font-size:12px;color:var(--text-ghost);margin-bottom:2px">SMS</div><a id="cmodal-sms" href="#" style="color:var(--sage);font-weight:500;text-decoration:none"></a></div></div>
     <div class="contact-item" style="padding:12px 0"><div class="contact-icon">✉️</div><div><div style="font-size:12px;color:var(--text-ghost);margin-bottom:2px">Email</div><a id="cmodal-email" href="#" style="color:var(--sage);font-weight:500;text-decoration:none"></a></div></div>
-    <button class="btn-full mt-16" onclick="openMsgFromContactModal()">Send Message in App</button>
-  </div>
-</div>
-
-<!-- ══════════════ FARMER LOCATION VIEW MODAL ══════════════ -->
-<div class="modal-overlay" id="location-view-modal">
-  <div class="modal-card" style="max-width:540px">
-    <button class="modal-close" onclick="document.getElementById('location-view-modal').classList.remove('open')">✕</button>
-    <div class="modal-title" id="lvm-title">Farm Location</div>
-    <p class="modal-sub" id="lvm-sub"></p>
-    <div id="location-view-map"></div>
-    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-mid);margin-top:10px">
-      <span>📍</span><span id="lvm-address"></span>
+    <div id="cmodal-location" style="display:none">
+      <div class="contact-item" style="padding:12px 0"><div class="contact-icon">📍</div><div><div style="font-size:12px;color:var(--text-ghost);margin-bottom:2px">Farm Location</div><span id="cmodal-loc-text" style="font-size:14px;color:var(--text-mid)"></span></div></div>
     </div>
+    <button class="btn-full mt-16" onclick="openMsgFromContactModal()">Send Message in App</button>
   </div>
 </div>
 
@@ -959,27 +1057,19 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const SUPABASE_URL = "https://hctbgdpenhmscpubajpg.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_Dy5pMEAjMyXjJSCAKZ108Q_kZB3OF1W";
-  const DEMO_MODE = false;
-  let supabase = null;
-</script>
-
-// ════════════════════════════════════════════════
-// IN-MEMORY FALLBACK (Demo mode when no Supabase)
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
+// IN-MEMORY FALLBACK DATABASE
+// Used when Firebase is not configured
+// ═══════════════════════════════════════
 let DB = {
   users: [
-    { id:'admin-1', email:'admin@harvestgo.ph', password:'admin123', name:'Admin', role:'admin', phone:'', address:'', wallet:0, transactions:[] }
+    { id:'admin-1', email:'admin@harvestgo.ph', password:'admin123', name:'Admin', role:'admin', phone:'', address:'', city:'', province:'', wallet:0, transactions:[], farmLat:null, farmLng:null, farmAddress:'', farmCity:'', farmProvince:'' }
   ],
   products: [],
   orders: [],
   messages: []
 };
 
-// ════════════════════════════════════════════════
-// APP STATE
-// ════════════════════════════════════════════════
 let App = {
   currentUser: null,
   loginRole: 'consumer',
@@ -991,165 +1081,29 @@ let App = {
   pendingListing: null,
   pendingPayOrderId: null,
   currentFilterCat: 'all',
-  farmMarker: null,
-  farmMap: null,
-  farmLat: null,
-  farmLng: null,
-  farmAddress: '',
-  selectedPayMethod: 'GCash',
-  locationViewMap: null,
+  useFirebase: false, // Set to true after Firebase config
 };
 
-// ════════════════════════════════════════════════
-// SUPABASE DB LAYER
-// ════════════════════════════════════════════════
-async function dbGetUsers() {
-  if (DEMO_MODE) return DB.users;
-  const { data } = await supabase.from('users').select('*');
-  return data || [];
-}
+// ─── Hide loading after page load ───
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.getElementById('loading-screen').classList.add('hidden');
+  }, 800);
+});
 
-async function dbCreateUser(user) {
-  if (DEMO_MODE) { DB.users.push(user); return user; }
-  const { data, error } = await supabase.from('users').insert([user]).select().single();
-  if (error) throw error;
-  return data;
-}
-
-async function dbUpdateUser(id, updates) {
-  if (DEMO_MODE) {
-    const u = DB.users.find(u => u.id === id);
-    if (u) Object.assign(u, updates);
-    return u;
+// ─── Firebase check ───
+document.addEventListener('firebaseReady', () => {
+  // Only enable Firebase if config is not placeholder
+  const apiKey = document.querySelector('script[type="module"]')?.textContent || '';
+  if (!apiKey.includes('YOUR_API_KEY')) {
+    App.useFirebase = true;
+    console.log('Firebase enabled');
   }
-  const { data, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
-  if (error) throw error;
-  return data;
-}
+});
 
-async function dbGetProducts() {
-  if (DEMO_MODE) return DB.products;
-  const { data } = await supabase.from('products').select('*').order('listed_at', { ascending: false });
-  return data || [];
-}
-
-async function dbCreateProduct(prod) {
-  if (DEMO_MODE) { DB.products.unshift(prod); return prod; }
-  const { data, error } = await supabase.from('products').insert([prod]).select().single();
-  if (error) throw error;
-  return data;
-}
-
-async function dbGetOrders(filter = {}) {
-  if (DEMO_MODE) {
-    let list = DB.orders;
-    if (filter.consumer_id) list = list.filter(o => o.consumer_id === filter.consumer_id);
-    if (filter.farmer_id) list = list.filter(o => o.farmer_id === filter.farmer_id);
-    return list;
-  }
-  let q = supabase.from('orders').select('*').order('created_at', { ascending: false });
-  if (filter.consumer_id) q = q.eq('consumer_id', filter.consumer_id);
-  if (filter.farmer_id) q = q.eq('farmer_id', filter.farmer_id);
-  const { data } = await q;
-  return data || [];
-}
-
-async function dbCreateOrder(order) {
-  if (DEMO_MODE) { DB.orders.push(order); return order; }
-  const { data, error } = await supabase.from('orders').insert([order]).select().single();
-  if (error) throw error;
-  return data;
-}
-
-async function dbUpdateOrder(id, updates) {
-  if (DEMO_MODE) {
-    const o = DB.orders.find(o => o.id === id);
-    if (o) Object.assign(o, updates);
-    return o;
-  }
-  const { data, error } = await supabase.from('orders').update(updates).eq('id', id).select().single();
-  if (error) throw error;
-  return data;
-}
-
-async function dbGetMessages(userId1, userId2) {
-  if (DEMO_MODE) {
-    return DB.messages.filter(m =>
-      (m.from_id === userId1 && m.to_id === userId2) ||
-      (m.from_id === userId2 && m.to_id === userId1)
-    ).sort((a,b) => a.created_at - b.created_at);
-  }
-  const { data } = await supabase.from('messages').select('*')
-    .or(`and(from_id.eq.${userId1},to_id.eq.${userId2}),and(from_id.eq.${userId2},to_id.eq.${userId1})`)
-    .order('created_at', { ascending: true });
-  return data || [];
-}
-
-async function dbGetAllMessages(userId) {
-  if (DEMO_MODE) {
-    return DB.messages.filter(m => m.from_id === userId || m.to_id === userId);
-  }
-  const { data } = await supabase.from('messages').select('*')
-    .or(`from_id.eq.${userId},to_id.eq.${userId}`)
-    .order('created_at', { ascending: false });
-  return data || [];
-}
-
-async function dbCreateMessage(msg) {
-  if (DEMO_MODE) { DB.messages.push(msg); return msg; }
-  const { data, error } = await supabase.from('messages').insert([msg]).select().single();
-  if (error) throw error;
-  return data;
-}
-
-async function dbMarkMessagesRead(fromId, toId) {
-  if (DEMO_MODE) {
-    DB.messages.forEach(m => {
-      if (m.from_id === fromId && m.to_id === toId) m.read = true;
-    });
-    return;
-  }
-  await supabase.from('messages').update({ read: true })
-    .eq('from_id', fromId).eq('to_id', toId).eq('read', false);
-}
-
-// ════════════════════════════════════════════════
-// INIT
-// ════════════════════════════════════════════════
-async function init() {
-  if (!DEMO_MODE) {
-    try {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    } catch(e) {
-      console.warn('Supabase init failed, using demo mode');
-    }
-  }
-
-  // Show demo mode banner if not configured
-  if (DEMO_MODE) {
-    const banner = document.createElement('div');
-    banner.className = 'db-config-banner';
-    banner.innerHTML = `⚠️ <strong>Demo Mode</strong> — Data is not saved. Add your Supabase keys to enable persistent storage. See the setup guide.`;
-    document.body.appendChild(banner);
-  }
-
-  // Update landing stats
-  try {
-    const users = await dbGetUsers();
-    const farmers = users.filter(u => u.role === 'farmer').length;
-    const consumers = users.filter(u => u.role === 'consumer').length;
-    document.getElementById('stat-farmers').textContent = farmers || '0';
-    document.getElementById('stat-consumers').textContent = consumers || '0';
-  } catch(e) {}
-
-  // Hide loading
-  document.getElementById('db-loading').style.display = 'none';
-  document.getElementById('screen-landing').classList.add('active');
-}
-
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // SCREEN / PAGE NAVIGATION
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + id).classList.add('active');
@@ -1172,12 +1126,12 @@ function showPage(id) {
   if (id === 'messages') renderThreads();
   if (id === 'admin') renderAdmin();
   if (id === 'profile') renderProfile();
-  if (id === 'sell') { checkSellPage(); initFarmMap(); }
+  if (id === 'sell') checkSellPage();
 }
 
-// ════════════════════════════════════════════════
-// AUTH
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
+// AUTH — REGISTER
+// ═══════════════════════════════════════
 function switchForm(type) {
   document.getElementById('form-login').style.display = type === 'login' ? 'block' : 'none';
   document.getElementById('form-register').style.display = type === 'register' ? 'block' : 'none';
@@ -1189,8 +1143,8 @@ function clearAuthErrors() {
   document.querySelectorAll('.err-text').forEach(e => e.classList.remove('show'));
 }
 
+// ─── Clear fields on switch / logout ───
 function clearAuthFields() {
-  // Clear all auth inputs so previous user's info doesn't show
   ['login-email','login-pass','reg-fname','reg-lname','reg-email','reg-phone','reg-pass','reg-pass2'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -1209,86 +1163,71 @@ function setRegRole(role, el) {
   el.classList.add('active');
 }
 
-async function handleRegister() {
+function handleRegister() {
   clearAuthErrors();
-  const fname = document.getElementById('reg-fname').value.trim();
-  const lname = document.getElementById('reg-lname').value.trim();
-  const email = document.getElementById('reg-email').value.trim().toLowerCase();
-  const phone = document.getElementById('reg-phone').value.trim();
-  const pass  = document.getElementById('reg-pass').value;
-  const pass2 = document.getElementById('reg-pass2').value;
+  const fname  = document.getElementById('reg-fname').value.trim();
+  const lname  = document.getElementById('reg-lname').value.trim();
+  const email  = document.getElementById('reg-email').value.trim().toLowerCase();
+  const phone  = document.getElementById('reg-phone').value.trim();
+  const pass   = document.getElementById('reg-pass').value;
+  const pass2  = document.getElementById('reg-pass2').value;
 
   if (!fname || !lname) { showToast('Please enter your full name'); return; }
   if (!email || !email.includes('@') || !email.includes('.')) {
     document.getElementById('err-reg-email').classList.add('show'); return;
   }
+  if (DB.users.find(u => u.email === email)) {
+    showToast('An account with this email already exists. Please sign in.'); return;
+  }
   if (pass.length < 8) { showToast('Password must be at least 8 characters'); return; }
   if (pass !== pass2) { document.getElementById('err-reg-pass2').classList.add('show'); return; }
 
-  const btn = document.getElementById('reg-btn');
-  btn.disabled = true; btn.textContent = 'Creating account...';
+  const newUser = {
+    id: 'user-' + Date.now(),
+    email, password: pass,
+    name: fname + ' ' + lname,
+    role: App.regRole,
+    phone, address: '', city: '', province: '',
+    wallet: 0,
+    transactions: [],
+    farmLat: null, farmLng: null,
+    farmAddress: '', farmCity: '', farmProvince: ''
+  };
+  DB.users.push(newUser);
 
-  try {
-    const users = await dbGetUsers();
-    if (users.find(u => u.email === email)) {
-      showToast('An account with this email already exists. Please sign in.');
-      btn.disabled = false; btn.textContent = 'Create Account';
-      return;
-    }
-    const newUser = {
-      id: 'user-' + Date.now(),
-      email, password: pass,
-      name: fname + ' ' + lname,
-      role: App.regRole,
-      phone, address: '',
-      wallet: 0,
-      transactions: []
-    };
-    const saved = await dbCreateUser(newUser);
-    await startSession(saved);
-  } catch(e) {
-    showToast('Registration failed. Please try again.');
-    console.error(e);
-  }
-  btn.disabled = false; btn.textContent = 'Create Account';
+  if (App.useFirebase) saveUserToFirebase(newUser);
+
+  startSession(newUser);
 }
 
-async function handleLogin() {
+function handleLogin() {
   clearAuthErrors();
   const email = document.getElementById('login-email').value.trim().toLowerCase();
   const pass  = document.getElementById('login-pass').value;
 
   if (!email) { document.getElementById('err-login-email').classList.add('show'); return; }
 
-  const btn = document.getElementById('login-btn');
-  btn.disabled = true; btn.textContent = 'Signing in...';
-
-  try {
-    const users = await dbGetUsers();
-
-    // Admin shorthand
-    if ((email === 'admin' || email === 'admin@harvestgo.ph') && pass === 'admin123') {
-      const admin = users.find(u => u.role === 'admin') || DB.users[0];
-      await startSession(admin);
-      btn.disabled = false; btn.textContent = 'Sign In';
-      return;
-    }
-
-    const user = users.find(u => u.email === email);
-    if (!user || user.password !== pass) {
-      document.getElementById('err-login-pass').classList.add('show');
-      btn.disabled = false; btn.textContent = 'Sign In';
-      return;
-    }
-    await startSession(user);
-  } catch(e) {
-    showToast('Login failed. Please try again.');
-    console.error(e);
+  if ((email === 'admin' || email === 'admin@harvestgo.ph') && pass === 'admin123') {
+    const admin = DB.users.find(u => u.role === 'admin');
+    startSession(admin);
+    return;
   }
-  btn.disabled = false; btn.textContent = 'Sign In';
+
+  const user = DB.users.find(u => u.email === email);
+  if (!user || user.password !== pass) {
+    document.getElementById('err-login-pass').classList.add('show');
+    return;
+  }
+
+  if (App.loginRole !== 'admin' && user.role !== App.loginRole) {
+    showToast(`This account is a ${user.role} account. Please select the correct role tab.`);
+    return;
+  }
+
+  startSession(user);
 }
 
-async function startSession(user) {
+function startSession(user) {
   App.currentUser = user;
   buildNav();
   document.getElementById('avatar-btn').textContent = user.name.charAt(0).toUpperCase();
@@ -1297,6 +1236,7 @@ async function startSession(user) {
   updateWalletDisplay();
   showScreen('app');
   showPage('shop');
+  clearAuthFields();
   showToast('Welcome, ' + user.name.split(' ')[0] + '! 👋');
 }
 
@@ -1304,21 +1244,13 @@ function logout() {
   App.currentUser = null;
   App.cart = [];
   App.activeThreadUserId = null;
-  App.farmMarker = null;
-  App.farmMap = null;
-  App.farmLat = null;
-  App.farmLng = null;
   clearAuthFields();
-  // Reset role tabs to consumer
-  document.querySelectorAll('#form-login .role-tab').forEach((t,i) => t.classList.toggle('active', i===0));
-  document.querySelectorAll('#form-register .role-tab').forEach((t,i) => t.classList.toggle('active', i===0));
-  App.loginRole = 'consumer'; App.regRole = 'consumer';
   showScreen('landing');
 }
 
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // NAV
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 function buildNav() {
   const navMap = {
     consumer: [
@@ -1348,9 +1280,9 @@ function buildNav() {
   ).join('');
 }
 
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // PASSWORD TOOLS
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 function togglePass(id, btn) {
   const input = document.getElementById(id);
   const isPass = input.type === 'password';
@@ -1359,121 +1291,39 @@ function togglePass(id, btn) {
   document.getElementById('eye-' + id + '-on').style.display = isPass ? 'block' : 'none';
 }
 
-// ════════════════════════════════════════════════
-// FARM MAP (Leaflet.js — Philippines)
-// ════════════════════════════════════════════════
-function initFarmMap() {
-  if (App.farmMap) {
-    setTimeout(() => App.farmMap.invalidateSize(), 100);
-    return;
-  }
-
-  // Center of Philippines
-  const PH_CENTER = [12.8797, 121.7740];
-  const map = L.map('farm-map', { center: PH_CENTER, zoom: 6 });
-  App.farmMap = map;
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors'
-  }).addTo(map);
-
-  // Philippines boundary (rough bounds to restrict panning)
-  const PH_BOUNDS = L.latLngBounds([4.5, 116.0], [21.5, 127.0]);
-
-  map.on('click', function(e) {
-    const { lat, lng } = e.latlng;
-    // Check if within Philippines bounds
-    if (!PH_BOUNDS.contains(e.latlng)) {
-      showToast('Please select a location within the Philippines 🇵🇭');
-      return;
-    }
-    placeMarker(lat, lng);
-  });
-
-  // If farmer already has a saved location, show it
-  if (App.currentUser && App.currentUser.farm_lat && App.currentUser.farm_lng) {
-    placeMarker(App.currentUser.farm_lat, App.currentUser.farm_lng, App.currentUser.farm_address);
-    map.setView([App.currentUser.farm_lat, App.currentUser.farm_lng], 12);
-  }
-
-  setTimeout(() => map.invalidateSize(), 200);
-}
-
-function placeMarker(lat, lng, address) {
-  const map = App.farmMap;
-  if (App.farmMarker) map.removeLayer(App.farmMarker);
-
-  const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
-  App.farmMarker = marker;
-  App.farmLat = lat;
-  App.farmLng = lng;
-
-  marker.on('dragend', function(e) {
-    const pos = marker.getLatLng();
-    App.farmLat = pos.lat;
-    App.farmLng = pos.lng;
-    reverseGeocode(pos.lat, pos.lng);
-  });
-
-  if (address) {
-    App.farmAddress = address;
-    showLocationDisplay(lat, lng, address);
-  } else {
-    reverseGeocode(lat, lng);
-  }
-
-  document.getElementById('err-farm-location').classList.remove('show');
-}
-
-function reverseGeocode(lat, lng) {
-  // Use Nominatim (free, no key needed)
-  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
-    .then(r => r.json())
-    .then(data => {
-      const address = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      App.farmAddress = address;
-      showLocationDisplay(lat, lng, address);
-    })
-    .catch(() => {
-      const address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      App.farmAddress = address;
-      showLocationDisplay(lat, lng, address);
-    });
-}
-
-function showLocationDisplay(lat, lng, address) {
-  const disp = document.getElementById('farm-location-display');
-  document.getElementById('farm-lat-lng').textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  document.getElementById('farm-address-display').textContent = address.split(',').slice(0,3).join(',');
-  disp.style.display = 'flex';
-}
-
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // PRODUCTS — RENDER
-// ════════════════════════════════════════════════
-async function renderProducts() {
-  const grid = document.getElementById('products-grid');
-  grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="spin" style="width:32px;height:32px;border-color:var(--border);border-top-color:var(--sage);margin:0 auto 12px"></div><p>Loading...</p></div>`;
+// ═══════════════════════════════════════
+function renderProducts() {
+  // Show address banner for consumers without address
+  const banner = document.getElementById('address-banner-shop');
+  if (App.currentUser && App.currentUser.role === 'consumer') {
+    const hasAddr = App.currentUser.address && App.currentUser.province;
+    banner.style.display = hasAddr ? 'none' : 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
 
+  const grid = document.getElementById('products-grid');
   const search = (document.getElementById('search-input')?.value || '').toLowerCase();
-  let list = await dbGetProducts();
-  list = list.filter(p => p.stock > 0);
+  let list = DB.products.filter(p => p.stock > 0);
   if (App.currentFilterCat !== 'all') list = list.filter(p => p.category === App.currentFilterCat);
-  if (search) list = list.filter(p => p.name.toLowerCase().includes(search) || p.farmer_name?.toLowerCase().includes(search));
+  if (search) list = list.filter(p => p.name.toLowerCase().includes(search) || p.farmerName.toLowerCase().includes(search));
 
   if (!list.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🌾</div><p>No products found yet. Check back soon!</p></div>`;
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🌾</div><p>${DB.products.length === 0 ? 'No products listed yet. Check back soon!' : 'No products found matching your search.'}</p></div>`;
     return;
   }
 
   grid.innerHTML = list.map(p => {
-    const imgContent = p.img_url
-      ? `<img src="${p.img_url}" alt="${p.name}">`
-      : `<span class="emoji-fallback">${p.emoji || '🌿'}</span>`;
-    const isMyProduct = App.currentUser && p.farmer_id === App.currentUser.id;
+    const imgContent = p.imgUrl
+      ? `<img src="${p.imgUrl}" alt="${p.name}">`
+      : `<span class="emoji-fallback">${p.emoji}</span>`;
+    const isMyProduct = App.currentUser && p.farmerId === App.currentUser.id;
     const addBtn = App.currentUser?.role === 'consumer'
       ? `<button class="add-btn" onclick="addToCart('${p.id}')">+</button>`
       : (isMyProduct ? `<span style="font-size:11px;color:var(--text-ghost)">Your listing</span>` : '');
+    const locBadge = p.farmProvince ? `<div style="font-size:11px;color:var(--text-ghost);margin-bottom:6px">📍 ${p.farmProvince}</div>` : '';
     return `
       <div class="product-card">
         <div class="product-img">
@@ -1482,9 +1332,8 @@ async function renderProducts() {
         </div>
         <div class="product-info">
           <div class="product-name">${p.name}</div>
-          <div class="product-farmer">by <a onclick="showFarmerContact('${p.id}')">${p.farmer_name}</a>
-            ${p.farm_lat ? `<span onclick="showFarmLocation('${p.id}')" style="cursor:pointer;color:var(--gold);margin-left:4px" title="View farm location">📍</span>` : ''}
-          </div>
+          <div class="product-farmer">by <a onclick="showFarmerContact('${p.id}')">${p.farmerName}</a></div>
+          ${locBadge}
           <div class="product-footer">
             <div class="product-price">₱${p.price}<small>/${p.unit}</small></div>
             ${addBtn}
@@ -1492,38 +1341,6 @@ async function renderProducts() {
         </div>
       </div>`;
   }).join('');
-}
-
-let _cachedProducts = [];
-async function getProductsCache() {
-  _cachedProducts = await dbGetProducts();
-  return _cachedProducts;
-}
-
-async function showFarmLocation(prodId) {
-  const products = await getProductsCache();
-  const p = products.find(x => x.id === prodId);
-  if (!p || !p.farm_lat) return;
-
-  document.getElementById('lvm-title').textContent = p.farmer_name + "'s Farm";
-  document.getElementById('lvm-sub').textContent = p.name;
-  document.getElementById('lvm-address').textContent = p.farm_address ? p.farm_address.split(',').slice(0,3).join(',') : '';
-  document.getElementById('location-view-modal').classList.add('open');
-
-  setTimeout(() => {
-    if (App.locationViewMap) {
-      App.locationViewMap.remove();
-      App.locationViewMap = null;
-    }
-    const map = L.map('location-view-map', { center: [p.farm_lat, p.farm_lng], zoom: 13 });
-    App.locationViewMap = map;
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
-    L.marker([p.farm_lat, p.farm_lng]).addTo(map)
-      .bindPopup(`<strong>${p.farmer_name}'s Farm</strong><br>${p.name}`).openPopup();
-    setTimeout(() => map.invalidateSize(), 100);
-  }, 200);
 }
 
 function filterCat(cat, el) {
@@ -1535,14 +1352,20 @@ function filterCat(cat, el) {
 
 function filterProducts() { renderProducts(); }
 
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // CART
-// ════════════════════════════════════════════════
-async function addToCart(id) {
-  const products = await getProductsCache();
-  const prod = products.find(p => p.id === id);
+// ═══════════════════════════════════════
+function addToCart(id) {
+  const prod = DB.products.find(p => p.id === id);
   if (!prod) return;
-  if (prod.farmer_id === App.currentUser.id) { showToast("You can't buy your own product"); return; }
+  if (prod.farmerId === App.currentUser.id) { showToast("You can't buy your own product"); return; }
+
+  // Check address
+  if (!App.currentUser.address || !App.currentUser.province) {
+    showToast('Please set your delivery address in your profile first! 📍');
+    setTimeout(() => showPage('profile'), 800);
+    return;
+  }
 
   const ex = App.cart.find(c => c.id === id);
   if (ex) {
@@ -1568,16 +1391,23 @@ function toggleCart() {
 
 function renderCart() {
   const list = document.getElementById('cart-items-list');
-  const footer = document.getElementById('cart-footer');
+
+  // Show delivery address in cart
+  const addrDisplay = document.getElementById('cart-addr-display');
+  if (App.currentUser && App.currentUser.address && App.currentUser.province) {
+    const fullAddr = [App.currentUser.address, App.currentUser.city, App.currentUser.province].filter(Boolean).join(', ');
+    addrDisplay.innerHTML = `<div class="addr-value">${fullAddr}</div>`;
+  } else {
+    addrDisplay.innerHTML = `<div class="addr-missing" onclick="toggleCart();showPage('profile')">⚠️ No delivery address — click to set</div>`;
+  }
 
   if (!App.cart.length) {
     list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-ghost);font-size:14px">🌿 Your basket is empty</div>';
-    footer.innerHTML = '';
+    document.getElementById('cart-total-display').textContent = '₱0.00';
     return;
   }
-
   list.innerHTML = App.cart.map(item => {
-    const imgHtml = item.img_url ? `<img src="${item.img_url}" alt="${item.name}">` : (item.emoji || '🌿');
+    const imgHtml = item.imgUrl ? `<img src="${item.imgUrl}" alt="${item.name}">` : item.emoji;
     return `
       <div class="cart-item">
         <div class="cart-item-img">${imgHtml}</div>
@@ -1592,69 +1422,8 @@ function renderCart() {
         </div>
       </div>`;
   }).join('');
-
-  const subtotal = App.cart.reduce((a,c) => a + c.price * c.qty, 0);
-  const user = App.currentUser;
-  const hasAddress = user && user.address && user.address.trim().length > 3;
-
-  // Shopee-style footer
-  footer.innerHTML = `
-    <div class="checkout-section">
-      <span class="checkout-section-label">Delivery Address</span>
-      ${hasAddress
-        ? `<div class="address-display">
-            <span class="addr-icon">📍</span>
-            <div class="addr-info">
-              <div class="addr-name">${user.name}</div>
-              <div>${user.address}</div>
-              ${user.phone ? `<div style="font-size:12px;color:var(--text-ghost)">${user.phone}</div>` : ''}
-              <span class="address-change-btn" onclick="toggleCart();showPage('profile')">Change address</span>
-            </div>
-          </div>`
-        : `<div class="address-missing">
-            ⚠️ No delivery address set. <span onclick="toggleCart();showPage('profile')" style="cursor:pointer;text-decoration:underline;font-weight:600;margin-left:4px">Add address →</span>
-          </div>`
-      }
-    </div>
-
-    <div class="checkout-section">
-      <span class="checkout-section-label">Payment Method</span>
-      <div class="pay-method-grid">
-        <div class="pay-method-card ${App.selectedPayMethod==='GCash'?'selected':''}" onclick="selectCartPay(this,'GCash')">
-          <div class="pay-method-icon">💚</div>
-          <div class="pay-method-info"><div class="pay-method-name">GCash</div><div class="pay-method-desc">Digital payment</div></div>
-          <div class="pay-method-check"></div>
-        </div>
-        <div class="pay-method-card ${App.selectedPayMethod==='Maya'?'selected':''}" onclick="selectCartPay(this,'Maya')">
-          <div class="pay-method-icon">💜</div>
-          <div class="pay-method-info"><div class="pay-method-name">Maya</div><div class="pay-method-desc">Digital payment</div></div>
-          <div class="pay-method-check"></div>
-        </div>
-        <div class="pay-method-card ${App.selectedPayMethod==='Online Banking'?'selected':''}" onclick="selectCartPay(this,'Online Banking')">
-          <div class="pay-method-icon">🏦</div>
-          <div class="pay-method-info"><div class="pay-method-name">Online Banking</div><div class="pay-method-desc">BDO, BPI, UnionBank</div></div>
-          <div class="pay-method-check"></div>
-        </div>
-        <div class="pay-method-card ${App.selectedPayMethod==='COD'?'selected':''}" onclick="selectCartPay(this,'COD')">
-          <div class="pay-method-icon">💵</div>
-          <div class="pay-method-info"><div class="pay-method-name">Cash on Delivery</div><div class="pay-method-desc">Pay when you receive</div></div>
-          <div class="pay-method-check"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="cart-total-row"><span>Subtotal</span><span>₱${subtotal.toFixed(2)}</span></div>
-    <div class="cart-total-row"><span>Delivery Fee</span><span style="color:var(--sage)">Arranged with Farmer</span></div>
-    <div class="cart-total-row grand"><span>Total</span><span>₱${subtotal.toFixed(2)}</span></div>
-    <button class="btn-full" onclick="checkout()" ${!hasAddress ? 'disabled title="Add delivery address first"' : ''} style="${!hasAddress ? 'opacity:0.5;cursor:not-allowed' : ''}">
-      ${!hasAddress ? '⚠️ Add Address First' : 'Place Order →'}
-    </button>
-  `;
-}
-
-function selectCartPay(el, method) {
-  App.selectedPayMethod = method;
-  renderCart();
+  const total = App.cart.reduce((a,c) => a + c.price * c.qty, 0);
+  document.getElementById('cart-total-display').textContent = '₱' + total.toFixed(2);
 }
 
 function changeQty(id, delta) {
@@ -1666,47 +1435,56 @@ function changeQty(id, delta) {
   renderCart();
 }
 
-async function checkout() {
+function selectPay(el) {
+  document.querySelectorAll('#cart-drawer .pay-opt-card').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function checkout() {
   if (!App.cart.length) { showToast('Your basket is empty'); return; }
-  const user = App.currentUser;
-  if (!user.address || user.address.trim().length < 4) {
-    showToast('Please set a delivery address in your profile first');
+
+  // Require delivery address
+  if (!App.currentUser.address || !App.currentUser.province) {
+    showToast('Please set your delivery address first! 📍');
     toggleCart();
-    showPage('profile');
+    setTimeout(() => showPage('profile'), 400);
     return;
   }
 
-  const payMethod = App.selectedPayMethod;
+  const total = App.cart.reduce((a,c) => a + c.price * c.qty, 0);
+  const payMethod = document.querySelector('#cart-drawer .pay-opt-card.selected')?.dataset.method || 'GCash';
+  const deliveryAddress = [App.currentUser.address, App.currentUser.city, App.currentUser.province].filter(Boolean).join(', ');
 
-  // Group by farmer
   const grouped = {};
   App.cart.forEach(item => {
-    if (!grouped[item.farmer_id]) grouped[item.farmer_id] = [];
-    grouped[item.farmer_id].push(item);
+    if (!grouped[item.farmerId]) grouped[item.farmerId] = [];
+    grouped[item.farmerId].push(item);
   });
 
-  for (const [farmerId, items] of Object.entries(grouped)) {
+  Object.entries(grouped).forEach(([farmerId, items]) => {
     const orderTotal = items.reduce((a,c) => a + c.price * c.qty, 0);
+    const farmer = DB.users.find(u => u.id === farmerId);
     const order = {
       id: 'ORD-' + Date.now() + '-' + Math.floor(Math.random()*1000),
-      consumer_id: user.id,
-      consumer_name: user.name,
-      consumer_address: user.address,
-      farmer_id: farmerId,
-      farmer_name: items[0].farmer_name,
-      items: JSON.stringify(items.map(i => ({ id:i.id, name:i.name, qty:i.qty, price:i.price, unit:i.unit, emoji:i.emoji, img_url:i.img_url||null }))),
+      consumerId: App.currentUser.id,
+      consumerName: App.currentUser.name,
+      deliveryAddress,
+      farmerId,
+      farmerName: farmer ? farmer.name : items[0].farmerName,
+      items: items.map(i => ({ id:i.id, name:i.name, qty:i.qty, price:i.price, unit:i.unit, emoji:i.emoji, imgUrl:i.imgUrl||null })),
       total: orderTotal,
       commission: orderTotal * 0.1,
-      pay_method: payMethod,
+      payMethod,
       status: 'pending',
       date: new Date().toISOString().split('T')[0],
-      created_at: Date.now(),
+      createdAt: Date.now(),
     };
-    await dbCreateOrder(order);
-    await sendSystemMsg(user.id, farmerId,
-      `Hi! I just placed an order (${order.id}) for: ${items.map(i => i.name + ' x' + i.qty).join(', ')}. Total: ₱${orderTotal.toFixed(2)}. Delivery to: ${user.address}`
+    DB.orders.push(order);
+
+    sendSystemMsg(App.currentUser.id, farmerId,
+      `Hi! I just placed an order (${order.id}) for: ${items.map(i => i.name + ' x' + i.qty).join(', ')}. Total: ₱${orderTotal.toFixed(2)}. Delivery to: ${deliveryAddress}.`
     );
-  }
+  });
 
   App.cart = [];
   updateCartCount();
@@ -1715,28 +1493,33 @@ async function checkout() {
   setTimeout(() => showPage('orders'), 800);
 }
 
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // ORDERS
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 const ORDER_STEPS = ['Order Placed','Farmer Confirmed','Payment Received','Completed'];
 const ORDER_ICONS = ['📋','✅','💳','🎉'];
 const STATUS_TO_STEP = { pending:0, confirmed:1, paid:2, completed:3 };
 
-async function renderOrders() {
+function renderOrders() {
   const user = App.currentUser;
   if (!user) return;
 
   const header = document.getElementById('orders-header');
   const list   = document.getElementById('orders-list');
-  list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-ghost)">Loading orders...</div>';
 
-  let filter = {};
-  if (user.role === 'consumer') { header.innerHTML = '<h2>My Orders</h2><span>Track your purchases</span>'; filter.consumer_id = user.id; }
-  else if (user.role === 'farmer') { header.innerHTML = '<h2>Incoming Orders</h2><span>Confirm and manage your sales</span>'; filter.farmer_id = user.id; }
-  else { header.innerHTML = '<h2>All Orders</h2><span>Platform overview</span>'; }
+  let myOrders;
+  if (user.role === 'consumer') {
+    header.innerHTML = '<h2>My Orders</h2><span>Track your purchases</span>';
+    myOrders = DB.orders.filter(o => o.consumerId === user.id);
+  } else if (user.role === 'farmer') {
+    header.innerHTML = '<h2>Incoming Orders</h2><span>Confirm and manage your sales</span>';
+    myOrders = DB.orders.filter(o => o.farmerId === user.id);
+  } else {
+    header.innerHTML = '<h2>All Orders</h2><span>Platform overview</span>';
+    myOrders = DB.orders;
+  }
 
-  let myOrders = await dbGetOrders(filter);
-  myOrders = myOrders.sort((a,b) => b.created_at - a.created_at);
+  myOrders = [...myOrders].sort((a,b) => b.createdAt - a.createdAt);
 
   if (!myOrders.length) {
     list.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><p>${user.role === 'consumer' ? "You haven't placed any orders yet." : "No orders yet."}</p></div>`;
@@ -1744,7 +1527,6 @@ async function renderOrders() {
   }
 
   list.innerHTML = myOrders.map(order => {
-    const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
     const step = STATUS_TO_STEP[order.status] ?? 0;
     const stepsHtml = ORDER_STEPS.map((s,i) => `
       <div class="track-step">
@@ -1754,90 +1536,94 @@ async function renderOrders() {
       ${i < ORDER_STEPS.length-1 ? `<div class="track-line ${i < step ? 'done' : ''}"></div>` : ''}
     `).join('');
 
-    const itemsSummary = items.map(i => `${i.name} ×${i.qty}`).join(', ');
+    const itemsSummary = order.items.map(i => `${i.name} ×${i.qty}`).join(', ');
+    const addrLine = order.deliveryAddress ? `<div style="font-size:12px;color:var(--text-ghost);margin-top:4px">📍 ${order.deliveryAddress}</div>` : '';
 
     let actions = '';
     if (user.role === 'farmer') {
-      if (order.status === 'pending') actions += `<button class="btn-sm btn-confirm" onclick="farmerConfirmOrder('${order.id}')">✓ Confirm Order</button>`;
-      if (order.status === 'paid') actions += `<button class="btn-sm btn-confirm" onclick="farmerCompleteOrder('${order.id}')">✓ Mark Completed</button>`;
-      actions += `<button class="btn-sm btn-msg" onclick="msgUser('${order.consumer_id}','${order.consumer_name}')">💬 Message Buyer</button>`;
+      if (order.status === 'pending') {
+        actions += `<button class="btn-sm btn-confirm" onclick="farmerConfirmOrder('${order.id}')">✓ Confirm Order</button>`;
+      }
+      if (order.status === 'paid') {
+        actions += `<button class="btn-sm btn-confirm" onclick="farmerCompleteOrder('${order.id}')">✓ Mark Completed</button>`;
+      }
+      actions += `<button class="btn-sm btn-msg" onclick="msgUser('${order.consumerId}','${order.consumerName}')">💬 Message Buyer</button>`;
     }
     if (user.role === 'consumer') {
-      if (order.status === 'confirmed') actions += `<button class="btn-sm btn-pay" onclick="openPayModal('${order.id}')">💳 Pay Now</button>`;
-      actions += `<button class="btn-sm btn-msg" onclick="msgUser('${order.farmer_id}','${order.farmer_name}')">💬 Message Farmer</button>`;
+      if (order.status === 'confirmed') {
+        actions += `<button class="btn-sm btn-pay" onclick="openPayModal('${order.id}')">💳 Pay Now</button>`;
+      }
+      actions += `<button class="btn-sm btn-msg" onclick="msgUser('${order.farmerId}','${order.farmerName}')">💬 Message Farmer</button>`;
     }
 
     const otherParty = user.role === 'farmer'
-      ? `Buyer: <strong>${order.consumer_name}</strong>`
-      : `Farmer: <strong>${order.farmer_name}</strong>`;
-
-    const addrLine = order.consumer_address ? `<div style="font-size:11px;color:var(--text-ghost);margin-top:2px">📍 ${order.consumer_address}</div>` : '';
+      ? `Buyer: <strong>${order.consumerName}</strong>`
+      : `Farmer: <strong>${order.farmerName}</strong>`;
 
     return `
       <div class="order-card">
         <div class="order-header">
           <div>
             <div class="order-id">${order.id}</div>
-            <div class="order-date">${order.date} · ${otherParty} · ${order.pay_method}</div>
+            <div class="order-date">${order.date} · ${otherParty} · ${order.payMethod}</div>
             ${addrLine}
           </div>
           <span class="order-status status-${order.status}">${order.status}</span>
         </div>
         <div class="order-track">${stepsHtml}</div>
         <div class="order-items">${itemsSummary}</div>
-        <div class="order-total">Total: ₱${Number(order.total).toFixed(2)}</div>
+        <div class="order-total">Total: ₱${order.total.toFixed(2)}</div>
         ${actions ? `<div class="order-actions">${actions}</div>` : ''}
       </div>`;
   }).join('');
 }
 
-async function farmerConfirmOrder(orderId) {
-  await dbUpdateOrder(orderId, { status: 'confirmed' });
-  const orders = await dbGetOrders({ farmer_id: App.currentUser.id });
-  const order = orders.find(o => o.id === orderId);
-  if (order) await sendSystemMsg(App.currentUser.id, order.consumer_id, `Your order ${order.id} has been confirmed! Please proceed to payment. ✅`);
-  renderOrders();
-  showToast('Order confirmed! Buyer has been notified to pay.');
-}
-
-async function farmerCompleteOrder(orderId) {
-  await dbUpdateOrder(orderId, { status: 'completed' });
-  const orders = await dbGetOrders({ farmer_id: App.currentUser.id });
-  const order = orders.find(o => o.id === orderId);
-  if (order) {
-    const net = order.total - order.commission;
-    const newWallet = (App.currentUser.wallet || 0) + net;
-    const txns = [...(App.currentUser.transactions || []), { type:'credit', amount:net, desc:`Sale: ${order.id}`, date:new Date().toLocaleDateString('en-PH') }];
-    await dbUpdateUser(App.currentUser.id, { wallet: newWallet, transactions: txns });
-    App.currentUser.wallet = newWallet;
-    App.currentUser.transactions = txns;
-    updateWalletDisplay();
-    await sendSystemMsg(App.currentUser.id, order.consumer_id, `Your order ${order.id} is completed. Thank you for shopping with HarvestGo! 🎉`);
-  }
-  renderOrders();
-  showToast('Order completed! Payment credited to your wallet!');
-}
-
-// ════════════════════════════════════════════════
-// PAY ORDER (Consumer)
-// ════════════════════════════════════════════════
-async function openPayModal(orderId) {
-  const orders = await dbGetOrders({ consumer_id: App.currentUser.id });
-  const order = orders.find(o => o.id === orderId);
+function farmerConfirmOrder(orderId) {
+  const order = DB.orders.find(o => o.id === orderId);
   if (!order) return;
-  const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+  order.status = 'confirmed';
+  sendSystemMsg(App.currentUser.id, order.consumerId,
+    `Your order ${order.id} has been confirmed! Please proceed to payment. ✅`
+  );
+  renderOrders();
+  showToast('Order confirmed! Consumer has been notified to pay.');
+}
+
+function farmerCompleteOrder(orderId) {
+  const order = DB.orders.find(o => o.id === orderId);
+  if (!order) return;
+  order.status = 'completed';
+  const farmer = DB.users.find(u => u.id === order.farmerId);
+  if (farmer) {
+    const net = order.total - order.commission;
+    farmer.wallet += net;
+    farmer.transactions.push({ type:'credit', amount:net, desc:`Sale: ${order.id}`, date:new Date().toLocaleDateString('en-PH') });
+  }
+  sendSystemMsg(App.currentUser.id, order.consumerId,
+    `Your order ${order.id} is completed. Thank you for shopping with HarvestGo! 🎉`
+  );
+  if (App.currentUser.role === 'farmer') updateWalletDisplay();
+  renderOrders();
+  showToast('Order marked as completed. Payment credited to your wallet!');
+}
+
+// ═══════════════════════════════════════
+// PAY ORDER (Consumer)
+// ═══════════════════════════════════════
+function openPayModal(orderId) {
+  const order = DB.orders.find(o => o.id === orderId);
+  if (!order) return;
   App.pendingPayOrderId = orderId;
-  document.getElementById('pay-modal-sub').textContent = `Order ${order.id} — Total: ₱${Number(order.total).toFixed(2)}`;
+  document.getElementById('pay-modal-sub').textContent = `Order ${order.id} — Total: ₱${order.total.toFixed(2)}`;
   document.getElementById('pay-modal-content').innerHTML = `
     <div style="background:var(--pale);border-radius:12px;padding:16px">
       <div style="font-size:13px;color:var(--text-soft);margin-bottom:8px">Items:</div>
-      ${items.map(i => `<div style="font-size:14px;font-weight:500;color:var(--text-dark);margin-bottom:4px">${i.name} ×${i.qty} — ₱${(i.price*i.qty).toFixed(2)}</div>`).join('')}
-      <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--forest);margin-top:10px">Total: ₱${Number(order.total).toFixed(2)}</div>
+      ${order.items.map(i => `<div style="font-size:14px;font-weight:500;color:var(--text-dark);margin-bottom:4px">${i.name} ×${i.qty} — ₱${(i.price*i.qty).toFixed(2)}</div>`).join('')}
+      <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--forest);margin-top:10px">Total: ₱${order.total.toFixed(2)}</div>
     </div>`;
-  document.querySelectorAll('#pay-modal-opts .pay-method-card').forEach((o,i) => {
+  document.querySelectorAll('#pay-modal-opts .pay-opt-card').forEach((o,i) => {
     o.classList.toggle('selected', i === 0);
   });
-  App.selectedPayMethod = 'GCash';
   document.getElementById('pay-modal').classList.add('open');
 }
 
@@ -1846,39 +1632,49 @@ function closePayModal() {
   App.pendingPayOrderId = null;
 }
 
-function selectPayModal(el, method) {
-  document.querySelectorAll('#pay-modal-opts .pay-method-card').forEach(o => o.classList.remove('selected'));
+function selectPayModal(el) {
+  document.querySelectorAll('#pay-modal-opts .pay-opt-card').forEach(o => o.classList.remove('selected'));
   el.classList.add('selected');
-  App.selectedPayMethod = method;
 }
 
-async function doPayOrder() {
+function doPayOrder() {
   const orderId = App.pendingPayOrderId;
   if (!orderId) return;
-  await dbUpdateOrder(orderId, { status: 'paid', pay_method: App.selectedPayMethod });
-  const orders = await dbGetOrders({ consumer_id: App.currentUser.id });
-  const order = orders.find(o => o.id === orderId);
-  if (order) {
-    const txns = [...(App.currentUser.transactions || []), { type:'debit', amount:order.total, desc:`Purchase: ${order.id}`, date:new Date().toLocaleDateString('en-PH') }];
-    await dbUpdateUser(App.currentUser.id, { transactions: txns });
-    App.currentUser.transactions = txns;
-    await sendSystemMsg(App.currentUser.id, order.farmer_id,
-      `Payment received for order ${order.id} via ${App.selectedPayMethod}. Please prepare the items! 💳`);
-  }
+  const order = DB.orders.find(o => o.id === orderId);
+  if (!order) return;
+  const method = document.querySelector('#pay-modal-opts .pay-opt-card.selected')?.dataset.method || 'GCash';
+  order.status = 'paid';
+  order.payMethod = method;
+  App.currentUser.transactions.push({ type:'debit', amount:order.total, desc:`Purchase: ${order.id}`, date:new Date().toLocaleDateString('en-PH') });
+  sendSystemMsg(App.currentUser.id, order.farmerId,
+    `Payment received for order ${order.id} via ${method}. Please prepare the items and mark as completed when delivered. 💳`
+  );
   closePayModal();
   renderOrders();
-  showToast('Payment confirmed! The farmer will prepare your order.');
+  showToast('Payment confirmed! The farmer will now prepare your order.');
 }
 
-// ════════════════════════════════════════════════
-// SELL (Farmer)
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
+// SELL (Farmer) + LOCATION CHECK
+// ═══════════════════════════════════════
 function checkSellPage() {
-  const notice = document.getElementById('wallet-low-notice');
-  notice.style.display = (App.currentUser && App.currentUser.wallet < 50) ? 'block' : 'none';
+  const walletNotice = document.getElementById('wallet-low-notice');
+  const locNotice = document.getElementById('location-required-notice');
+  if (App.currentUser && App.currentUser.wallet < 50) {
+    walletNotice.style.display = 'block';
+  } else {
+    walletNotice.style.display = 'none';
+  }
+  if (App.currentUser && (!App.currentUser.farmProvince)) {
+    locNotice.style.display = 'block';
+  } else {
+    locNotice.style.display = 'none';
+  }
 }
 
-function triggerImgUpload() { document.getElementById('product-img-input').click(); }
+function triggerImgUpload() {
+  document.getElementById('product-img-input').click();
+}
 
 function handleImgUpload(event) {
   const file = event.target.files[0];
@@ -1887,12 +1683,13 @@ function handleImgUpload(event) {
   const reader = new FileReader();
   reader.onload = function(e) {
     App.selectedImgDataUrl = e.target.result;
+    const area = document.getElementById('img-upload-area');
     document.getElementById('img-placeholder').style.display = 'none';
     const preview = document.getElementById('img-preview');
     preview.src = e.target.result;
     preview.style.display = 'block';
     document.getElementById('img-remove-btn').style.display = 'flex';
-    document.getElementById('img-upload-area').classList.add('has-img');
+    area.classList.add('has-img');
     updatePreview();
     showToast('Photo uploaded ✓');
   };
@@ -1902,11 +1699,13 @@ function handleImgUpload(event) {
 function removeImg(event) {
   if (event && event.stopPropagation) event.stopPropagation();
   App.selectedImgDataUrl = null;
+  const area = document.getElementById('img-upload-area');
   document.getElementById('img-placeholder').style.display = 'block';
   const preview = document.getElementById('img-preview');
-  preview.src = ''; preview.style.display = 'none';
+  preview.src = '';
+  preview.style.display = 'none';
   document.getElementById('img-remove-btn').style.display = 'none';
-  document.getElementById('img-upload-area').classList.remove('has-img');
+  area.classList.remove('has-img');
   document.getElementById('product-img-input').value = '';
   updatePreview();
 }
@@ -1930,7 +1729,11 @@ function updatePreview() {
   document.getElementById('preview-price').textContent = '₱' + price.toFixed(2) + ' /' + unit;
   document.getElementById('preview-stock').textContent = stock + ' ' + unit + ' available';
   const imgBox = document.getElementById('preview-img-box');
-  imgBox.innerHTML = App.selectedImgDataUrl ? `<img src="${App.selectedImgDataUrl}" alt="preview">` : App.selectedEmoji;
+  if (App.selectedImgDataUrl) {
+    imgBox.innerHTML = `<img src="${App.selectedImgDataUrl}" alt="preview">`;
+  } else {
+    imgBox.textContent = App.selectedEmoji;
+  }
 }
 
 function confirmListProduct() {
@@ -1946,11 +1749,10 @@ function confirmListProduct() {
   if (!price || price <= 0) { showToast('Please enter a valid price'); return; }
   if (!stock || stock <= 0) { showToast('Please enter available stock'); return; }
 
-  // REQUIRE FARM LOCATION
-  if (!App.farmLat || !App.farmLng) {
-    document.getElementById('err-farm-location').classList.add('show');
-    document.getElementById('farm-map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    showToast('Please drop a pin on your farm location 📍');
+  // ─── Require farm location ───
+  if (!App.currentUser.farmProvince) {
+    showToast('Please set your farm location in your profile first! 📍');
+    showPage('profile');
     return;
   }
 
@@ -1973,42 +1775,43 @@ function confirmListProduct() {
         <div style="font-weight:700;font-size:16px;color:var(--text-dark)">${name}</div>
         <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--forest);margin:4px 0">₱${price.toFixed(2)} <small style="font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text-ghost)">/${unit}</small></div>
         <div style="font-size:12px;color:var(--text-ghost)">${stock} ${unit} · ${cat} · ${organic ? '🌿 Organic' : 'Conventional'}</div>
-        <div style="font-size:12px;color:var(--text-mid);margin-top:4px">📍 ${App.farmAddress.split(',').slice(0,2).join(',')}</div>
+        <div style="font-size:12px;color:var(--text-ghost);margin-top:2px">📍 ${App.currentUser.farmCity || ''} ${App.currentUser.farmProvince || ''}</div>
+        ${desc ? `<div style="font-size:12px;color:var(--text-soft);margin-top:4px">"${desc.slice(0,80)}${desc.length>80?'…':''}"</div>` : ''}
       </div>
     </div>
-    <div style="font-size:13px;color:var(--text-mid)">Wallet balance: <strong style="color:var(--forest)">₱${App.currentUser.wallet.toFixed(2)}</strong></div>
+    <div style="font-size:13px;color:var(--text-mid)">Your wallet balance: <strong style="color:var(--forest)">₱${App.currentUser.wallet.toFixed(2)}</strong></div>
     <div style="font-size:13px;color:var(--text-mid);margin-top:4px">After listing fee: <strong style="color:var(--forest)">₱${(App.currentUser.wallet - 50).toFixed(2)}</strong></div>`;
+
   document.getElementById('listing-modal').classList.add('open');
 }
 
-function closeListingModal() { document.getElementById('listing-modal').classList.remove('open'); }
+function closeListingModal() {
+  document.getElementById('listing-modal').classList.remove('open');
+}
 
-async function doListProduct() {
+function doListProduct() {
   if (!App.pendingListing) return;
   const { name, price, stock, unit, cat, desc, organic, emoji, imgUrl } = App.pendingListing;
 
-  // Deduct listing fee
-  const newWallet = App.currentUser.wallet - 50;
-  const txns = [...(App.currentUser.transactions || []), { type:'debit', amount:50, desc:`Listing fee: ${name}`, date:new Date().toLocaleDateString('en-PH') }];
-  await dbUpdateUser(App.currentUser.id, { wallet: newWallet, transactions: txns });
-  App.currentUser.wallet = newWallet;
-  App.currentUser.transactions = txns;
+  App.currentUser.wallet -= 50;
+  App.currentUser.transactions.push({ type:'debit', amount:50, desc:`Listing fee: ${name}`, date:new Date().toLocaleDateString('en-PH') });
   updateWalletDisplay();
 
   const prod = {
     id: 'prod-' + Date.now(),
-    name, emoji, img_url: imgUrl || null, price, unit,
-    farmer_name: App.currentUser.name,
-    farmer_id: App.currentUser.id,
-    farmer_phone: App.currentUser.phone || '',
-    farmer_email: App.currentUser.email || '',
+    name, emoji, imgUrl: imgUrl || null, price, unit,
+    farmerName: App.currentUser.name,
+    farmerId: App.currentUser.id,
+    farmerPhone: App.currentUser.phone || '',
+    farmerEmail: App.currentUser.email || '',
+    farmProvince: App.currentUser.farmProvince || '',
+    farmCity: App.currentUser.farmCity || '',
+    farmLat: App.currentUser.farmLat || null,
+    farmLng: App.currentUser.farmLng || null,
     category: cat, organic, stock, description: desc,
-    farm_lat: App.farmLat,
-    farm_lng: App.farmLng,
-    farm_address: App.farmAddress,
-    listed_at: Date.now(),
+    listedAt: Date.now(),
   };
-  await dbCreateProduct(prod);
+  DB.products.unshift(prod);
 
   // Reset sell form
   document.getElementById('sell-name').value = '';
@@ -2018,30 +1821,26 @@ async function doListProduct() {
   document.getElementById('listing-preview').style.display = 'none';
   removeImg({});
   App.pendingListing = null;
-  // Reset map
-  if (App.farmMarker && App.farmMap) App.farmMap.removeLayer(App.farmMarker);
-  App.farmMarker = null; App.farmLat = null; App.farmLng = null; App.farmAddress = '';
-  document.getElementById('farm-location-display').style.display = 'none';
 
   closeListingModal();
   showToast('✓ ' + name + ' is now live on the marketplace!');
   setTimeout(() => showPage('shop'), 600);
 }
 
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // WALLET
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 function updateWalletDisplay() {
   if (!App.currentUser) return;
-  const bal = (App.currentUser.wallet || 0).toFixed(2);
+  const bal = App.currentUser.wallet.toFixed(2);
   document.getElementById('wallet-amount').textContent = bal;
-  const wb = document.getElementById('wallet-big');
-  if (wb) wb.textContent = bal;
+  document.getElementById('wallet-big').textContent = bal;
 }
 
 function renderWallet() {
   updateWalletDisplay();
-  const txns = App.currentUser.transactions || [];
+  const user = App.currentUser;
+  const txns = user.transactions || [];
   const hist = document.getElementById('txn-history');
   if (!txns.length) {
     hist.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-ghost);font-size:14px">No transactions yet</div>';
@@ -2068,7 +1867,9 @@ function openTopup() {
   document.getElementById('topup-modal').classList.add('open');
 }
 
-function closeTopup() { document.getElementById('topup-modal').classList.remove('open'); }
+function closeTopup() {
+  document.getElementById('topup-modal').classList.remove('open');
+}
 
 function setTopupStep(step) {
   [1,2,3].forEach(i => {
@@ -2084,7 +1885,10 @@ function topupStep2() {
   const num = document.getElementById('gcash-num').value.trim();
   const amt = parseFloat(document.getElementById('topup-amount').value);
   if (!num || num.replace(/\s/g,'').length < 10) { showToast('Please enter a valid GCash number'); return; }
-  if (!amt || amt < 100) { document.getElementById('err-topup').classList.add('show'); return; }
+  if (!amt || amt < 100) {
+    document.getElementById('err-topup').classList.add('show');
+    return;
+  }
   document.getElementById('err-topup').classList.remove('show');
   const ref = 'HG-' + Date.now().toString().slice(-8);
   document.getElementById('qr-amount-display').textContent = '₱' + amt.toFixed(2);
@@ -2095,38 +1899,35 @@ function topupStep2() {
 
 function topupBack() { setTopupStep(1); }
 
-async function topupStep3() {
+function topupStep3() {
   const amt = parseFloat(document.getElementById('topup-amount').value);
   if (!amt || amt < 100) { showToast('Invalid amount'); return; }
-  const newWallet = (App.currentUser.wallet || 0) + amt;
+  App.currentUser.wallet += amt;
   const dateStr = new Date().toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' });
-  const txns = [...(App.currentUser.transactions || []), { type:'credit', amount:amt, desc:`GCash Top-Up`, date:dateStr }];
-  await dbUpdateUser(App.currentUser.id, { wallet: newWallet, transactions: txns });
-  App.currentUser.wallet = newWallet;
-  App.currentUser.transactions = txns;
+  App.currentUser.transactions.push({ type:'credit', amount:amt, desc:`GCash Top-Up`, date:dateStr });
   document.getElementById('confirm-amount-display').textContent = '₱' + amt.toFixed(2);
   document.getElementById('last-topup-label').textContent = 'Last topped up: ' + dateStr;
   updateWalletDisplay();
   setTopupStep(3);
 }
 
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // MESSAGES
-// ════════════════════════════════════════════════
-async function sendSystemMsg(fromId, toId, text) {
-  const msg = {
+// ═══════════════════════════════════════
+function sendSystemMsg(fromId, toId, text) {
+  DB.messages.push({
     id: 'msg-' + Date.now() + '-' + Math.random(),
-    from_id: fromId,
-    to_id: toId,
+    from: fromId,
+    to: toId,
     text,
     time: new Date().toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' }),
-    created_at: Date.now(),
+    createdAt: Date.now(),
     read: false,
-  };
-  await dbCreateMessage(msg);
+  });
   if (App.currentUser && App.activeThreadUserId) {
-    if (App.activeThreadUserId === fromId || App.activeThreadUserId === toId) {
-      renderChatWith(App.activeThreadUserId);
+    const tid = App.activeThreadUserId;
+    if (tid === fromId || tid === toId) {
+      renderChatWith(tid);
     }
   }
   updateMsgNotif();
@@ -2141,32 +1942,30 @@ function msgUser(userId, userName) {
   }, 100);
 }
 
-async function renderThreads() {
-  const tl = document.getElementById('thread-list');
+function getThreads() {
   const myId = App.currentUser.id;
-  const allMsgs = await dbGetAllMessages(myId);
-
   const partners = new Set();
-  allMsgs.forEach(m => {
-    if (m.from_id === myId) partners.add(m.to_id);
-    if (m.to_id === myId) partners.add(m.from_id);
+  DB.messages.forEach(m => {
+    if (m.from === myId) partners.add(m.to);
+    if (m.to === myId) partners.add(m.from);
   });
+  return [...partners].map(uid => {
+    const user = DB.users.find(u => u.id === uid);
+    const msgs = DB.messages.filter(m => (m.from===myId&&m.to===uid)||(m.from===uid&&m.to===myId))
+                             .sort((a,b) => a.createdAt - b.createdAt);
+    const last = msgs[msgs.length-1];
+    const unread = msgs.filter(m => m.to === myId && !m.read).length;
+    return { uid, name: user ? user.name : 'Unknown', role: user ? user.role : '', last, msgs, unread };
+  }).sort((a,b) => (b.last?.createdAt||0) - (a.last?.createdAt||0));
+}
 
-  if (!partners.size) {
+function renderThreads() {
+  const tl = document.getElementById('thread-list');
+  const threads = getThreads();
+  if (!threads.length) {
     tl.innerHTML = '<div class="msg-no-threads">No conversations yet.<br>Messages from orders will appear here.</div>';
     return;
   }
-
-  const users = await dbGetUsers();
-  const threads = [...partners].map(uid => {
-    const user = users.find(u => u.id === uid);
-    const msgs = allMsgs.filter(m => (m.from_id===myId&&m.to_id===uid)||(m.from_id===uid&&m.to_id===myId))
-                         .sort((a,b) => a.created_at - b.created_at);
-    const last = msgs[msgs.length-1];
-    const unread = msgs.filter(m => m.to_id === myId && !m.read).length;
-    return { uid, name: user ? user.name : 'Unknown', role: user ? user.role : '', last, unread };
-  }).sort((a,b) => (b.last?.created_at||0) - (a.last?.created_at||0));
-
   tl.innerHTML = threads.map(t => `
     <div class="msg-thread ${App.activeThreadUserId === t.uid ? 'active' : ''}" onclick="openChatWith('${t.uid}','${t.name}')">
       <div class="msg-avatar">${t.name.charAt(0).toUpperCase()}</div>
@@ -2182,11 +1981,10 @@ async function renderThreads() {
   updateMsgNotif();
 }
 
-async function updateMsgNotif() {
+function updateMsgNotif() {
   if (!App.currentUser) return;
   const myId = App.currentUser.id;
-  const allMsgs = await dbGetAllMessages(myId);
-  const unread = allMsgs.filter(m => m.to_id === myId && !m.read).length;
+  const unread = DB.messages.filter(m => m.to === myId && !m.read).length;
   const btn = document.querySelector('.nav-btn[data-page="messages"]');
   if (!btn) return;
   const old = btn.querySelector('.nav-notif');
@@ -2194,10 +1992,9 @@ async function updateMsgNotif() {
   if (unread > 0) btn.insertAdjacentHTML('beforeend', '<span class="nav-notif"></span>');
 }
 
-async function openChatWith(uid, nameHint) {
+function openChatWith(uid, nameHint) {
   App.activeThreadUserId = uid;
-  const users = await dbGetUsers();
-  const user = users.find(u => u.id === uid);
+  const user = DB.users.find(u => u.id === uid);
   const name = user ? user.name : (nameHint || 'User');
   const role = user ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
 
@@ -2205,68 +2002,119 @@ async function openChatWith(uid, nameHint) {
   document.getElementById('msg-contact-role').textContent = role;
   document.getElementById('msg-contact-info-btn').style.display = 'flex';
 
-  await dbMarkMessagesRead(uid, App.currentUser.id);
+  const myId = App.currentUser.id;
+  DB.messages.forEach(m => { if (m.from === uid && m.to === myId) m.read = true; });
+
   renderChatWith(uid);
   renderThreads();
   updateMsgNotif();
 }
 
-async function renderChatWith(uid) {
+function renderChatWith(uid) {
   const myId = App.currentUser.id;
-  const msgs = await dbGetMessages(myId, uid);
+  const msgs = DB.messages
+    .filter(m => (m.from===myId&&m.to===uid)||(m.from===uid&&m.to===myId))
+    .sort((a,b) => a.createdAt - b.createdAt);
+
   const body = document.getElementById('msg-body');
   if (!msgs.length) {
     body.innerHTML = '<div class="msg-empty"><div class="msg-empty-inner"><div class="big-icon">👋</div><p>Say hello to start the conversation</p></div></div>';
     return;
   }
   body.innerHTML = msgs.map(m => `
-    <div class="bubble ${m.from_id === myId ? 'me' : 'them'}">
+    <div class="bubble ${m.from === myId ? 'me' : 'them'}">
       <div class="bubble-text">${m.text.replace(/</g,'&lt;')}</div>
       <div class="bubble-time">${m.time}</div>
     </div>`).join('');
   body.scrollTop = body.scrollHeight;
 }
 
-async function sendMsg() {
+function sendMsg() {
   const input = document.getElementById('msg-input');
   const text = input.value.trim();
   if (!text || !App.activeThreadUserId) return;
-  const msg = {
+  const myId = App.currentUser.id;
+  DB.messages.push({
     id: 'msg-' + Date.now(),
-    from_id: App.currentUser.id,
-    to_id: App.activeThreadUserId,
+    from: myId,
+    to: App.activeThreadUserId,
     text,
     time: new Date().toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' }),
-    created_at: Date.now(),
+    createdAt: Date.now(),
     read: false,
-  };
-  await dbCreateMessage(msg);
+  });
   input.value = '';
   renderChatWith(App.activeThreadUserId);
   renderThreads();
 }
 
-// ════════════════════════════════════════════════
-// CONTACT MODAL
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
+// MAP LOCATION (Farmer Profile)
+// ═══════════════════════════════════════
+function updateMapPin() {
+  const lat = parseFloat(document.getElementById('farm-lat').value);
+  const lng = parseFloat(document.getElementById('farm-lng').value);
+  if (!lat || !lng) return;
+
+  // Validate Philippines bounds
+  if (lat < 4.5 || lat > 21 || lng < 116 || lng > 127) {
+    showToast('Please enter coordinates within the Philippines');
+    return;
+  }
+
+  const iframe = document.getElementById('farm-map-iframe');
+  iframe.src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.5},${lat-0.5},${lng+0.5},${lat+0.5}&layer=mapnik&marker=${lat},${lng}`;
+
+  const pinDisplay = document.getElementById('map-pin-display');
+  const pinText = document.getElementById('map-pin-text');
+  pinDisplay.style.display = 'flex';
+  pinText.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+}
+
+function useCurrentLocation() {
+  if (!navigator.geolocation) {
+    showToast('Geolocation not supported by your browser');
+    return;
+  }
+  showToast('Getting your location...');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      if (lat < 4.5 || lat > 21 || lng < 116 || lng > 127) {
+        showToast('Your location appears to be outside the Philippines');
+        return;
+      }
+      document.getElementById('farm-lat').value = lat.toFixed(6);
+      document.getElementById('farm-lng').value = lng.toFixed(6);
+      updateMapPin();
+      showToast('Location set! ✓');
+    },
+    (err) => {
+      showToast('Could not get location. Please enter coordinates manually.');
+    }
+  );
+}
+
+// ═══════════════════════════════════════
+// CONTACT MODAL (from farmer name click)
+// ═══════════════════════════════════════
 let _contactModalData = null;
 
-async function showFarmerContact(prodId) {
-  const products = await getProductsCache();
-  const prod = products.find(p => p.id === prodId);
+function showFarmerContact(prodId) {
+  const prod = DB.products.find(p => p.id === prodId);
   if (!prod) return;
-  _contactModalData = { userId: prod.farmer_id, name: prod.farmer_name, role: 'Farmer', phone: prod.farmer_phone, email: prod.farmer_email };
+  _contactModalData = { userId: prod.farmerId, name: prod.farmerName, role: 'Farmer', phone: prod.farmerPhone, email: prod.farmerEmail, farmProvince: prod.farmProvince, farmCity: prod.farmCity };
   populateContactModal();
   document.getElementById('contact-modal').classList.add('open');
 }
 
-async function showContactModal() {
+function showContactModal() {
   const uid = App.activeThreadUserId;
   if (!uid) return;
-  const users = await dbGetUsers();
-  const user = users.find(u => u.id === uid);
+  const user = DB.users.find(u => u.id === uid);
   if (!user) return;
-  _contactModalData = { userId: uid, name: user.name, role: user.role, phone: user.phone, email: user.email };
+  _contactModalData = { userId: uid, name: user.name, role: user.role, phone: user.phone, email: user.email, farmProvince: user.farmProvince, farmCity: user.farmCity };
   populateContactModal();
   document.getElementById('contact-modal').classList.add('open');
 }
@@ -2284,33 +2132,39 @@ function populateContactModal() {
   const emailEl = document.getElementById('cmodal-email');
   emailEl.href = 'mailto:' + d.email;
   emailEl.textContent = d.email;
+
+  const locDiv = document.getElementById('cmodal-location');
+  if (d.farmProvince || d.farmCity) {
+    locDiv.style.display = 'block';
+    document.getElementById('cmodal-loc-text').textContent = [d.farmCity, d.farmProvince].filter(Boolean).join(', ');
+  } else {
+    locDiv.style.display = 'none';
+  }
 }
 
 function closeContactModal() { document.getElementById('contact-modal').classList.remove('open'); }
+
 function openMsgFromContactModal() {
   closeContactModal();
   if (_contactModalData) msgUser(_contactModalData.userId, _contactModalData.name);
 }
 
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // ADMIN
-// ════════════════════════════════════════════════
-async function renderAdmin() {
-  const [allOrders, allUsers, allProducts] = await Promise.all([
-    dbGetOrders(), dbGetUsers(), dbGetProducts()
-  ]);
-  const totalRevenue = allOrders.reduce((a,o) => a + Number(o.total), 0);
-  const totalCommission = allOrders.reduce((a,o) => a + Number(o.commission), 0);
-  const farmers = allUsers.filter(u => u.role === 'farmer').length;
-  const consumers = allUsers.filter(u => u.role === 'consumer').length;
+// ═══════════════════════════════════════
+function renderAdmin() {
+  const totalRevenue = DB.orders.reduce((a,o) => a + o.total, 0);
+  const totalCommission = DB.orders.reduce((a,o) => a + o.commission, 0);
+  const farmers = DB.users.filter(u => u.role === 'farmer').length;
+  const consumers = DB.users.filter(u => u.role === 'consumer').length;
 
   document.getElementById('admin-stats').innerHTML = [
-    { label:'Total Orders', value: allOrders.length, sub:'All time' },
+    { label:'Total Orders', value: DB.orders.length, sub:'All time' },
     { label:'Total Revenue', value: '₱'+totalRevenue.toFixed(0), sub:'Gross sales' },
     { label:'Platform Commission', value: '₱'+totalCommission.toFixed(0), sub:'10% of sales' },
     { label:'Farmers', value: farmers, sub:'Registered' },
     { label:'Consumers', value: consumers, sub:'Registered' },
-    { label:'Products Listed', value: allProducts.length, sub:'Active listings' },
+    { label:'Products Listed', value: DB.products.length, sub:'Active listings' },
   ].map(s => `
     <div class="stat-card">
       <div class="stat-label">${s.label}</div>
@@ -2318,24 +2172,25 @@ async function renderAdmin() {
       <div class="stat-sub">${s.sub}</div>
     </div>`).join('');
 
-  document.getElementById('admin-tbody').innerHTML = allOrders.length
-    ? allOrders.map(o => `
+  const sorted = [...DB.orders].sort((a,b) => b.createdAt - a.createdAt);
+  document.getElementById('admin-tbody').innerHTML = sorted.length
+    ? sorted.map(o => `
         <tr>
           <td class="td-bold">${o.id}</td>
-          <td>${o.consumer_name}</td>
-          <td>${o.farmer_name}</td>
-          <td>${(typeof o.items === 'string' ? JSON.parse(o.items) : o.items).map(i=>i.name).join(', ')}</td>
-          <td class="td-bold">₱${Number(o.total).toFixed(2)}</td>
-          <td style="color:var(--sage);font-weight:600">₱${Number(o.commission).toFixed(2)}</td>
+          <td>${o.consumerName}</td>
+          <td>${o.farmerName}</td>
+          <td>${o.items.map(i=>i.name).join(', ')}</td>
+          <td class="td-bold">₱${o.total.toFixed(2)}</td>
+          <td style="color:var(--sage);font-weight:600">₱${o.commission.toFixed(2)}</td>
           <td><span class="order-status status-${o.status}">${o.status}</span></td>
           <td>${o.date}</td>
         </tr>`).join('')
     : `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-ghost)">No orders yet</td></tr>`;
 }
 
-// ════════════════════════════════════════════════
-// PROFILE
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
+// PROFILE (with role-based sections)
+// ═══════════════════════════════════════
 function renderProfile() {
   if (!App.currentUser) return;
   const u = App.currentUser;
@@ -2345,31 +2200,99 @@ function renderProfile() {
   document.getElementById('profile-name-field').value = u.name;
   document.getElementById('profile-email-field').value = u.email;
   document.getElementById('profile-phone-field').value = u.phone || '';
-  document.getElementById('profile-address-field').value = u.address || '';
-  // Hide the required tag if address already set
-  const reqTag = document.getElementById('address-required-tag');
-  if (reqTag) reqTag.style.display = (u.address && u.address.trim().length > 3) ? 'none' : '';
+
+  // Show correct section
+  const isConsumer = u.role === 'consumer';
+  document.getElementById('consumer-address-section').style.display = isConsumer ? 'block' : 'none';
+  document.getElementById('farmer-location-section').style.display = (u.role === 'farmer') ? 'block' : 'none';
+
+  if (isConsumer) {
+    document.getElementById('profile-address-field').value = u.address || '';
+    document.getElementById('profile-city-field').value = u.city || '';
+    document.getElementById('profile-province-field').value = u.province || '';
+  }
+
+  if (u.role === 'farmer') {
+    document.getElementById('farm-address-field').value = u.farmAddress || '';
+    document.getElementById('farm-city-field').value = u.farmCity || '';
+    document.getElementById('farm-province-field').value = u.farmProvince || '';
+    if (u.farmLat) document.getElementById('farm-lat').value = u.farmLat;
+    if (u.farmLng) document.getElementById('farm-lng').value = u.farmLng;
+    if (u.farmLat && u.farmLng) {
+      updateMapPin();
+    }
+  }
 }
 
-async function saveProfile() {
+function saveProfile() {
   if (!App.currentUser) return;
-  const name = document.getElementById('profile-name-field').value.trim() || App.currentUser.name;
-  const phone = document.getElementById('profile-phone-field').value.trim();
-  const address = document.getElementById('profile-address-field').value.trim();
-  const updates = { name, phone, address };
-  await dbUpdateUser(App.currentUser.id, updates);
-  Object.assign(App.currentUser, updates);
-  document.getElementById('profile-name-display').textContent = name;
-  document.getElementById('profile-avatar-big').textContent = name.charAt(0).toUpperCase();
-  document.getElementById('avatar-btn').textContent = name.charAt(0).toUpperCase();
-  const reqTag = document.getElementById('address-required-tag');
-  if (reqTag) reqTag.style.display = (address && address.length > 3) ? 'none' : '';
-  showToast('Profile updated ✓');
+  const u = App.currentUser;
+  u.name = document.getElementById('profile-name-field').value.trim() || u.name;
+  u.phone = document.getElementById('profile-phone-field').value.trim();
+
+  if (u.role === 'consumer') {
+    u.address = document.getElementById('profile-address-field').value.trim();
+    u.city = document.getElementById('profile-city-field').value.trim();
+    u.province = document.getElementById('profile-province-field').value;
+
+    if (!u.address || !u.province) {
+      showToast('Please fill in your delivery address and province before saving.');
+      return;
+    }
+  }
+
+  if (u.role === 'farmer') {
+    u.farmAddress = document.getElementById('farm-address-field').value.trim();
+    u.farmCity = document.getElementById('farm-city-field').value.trim();
+    u.farmProvince = document.getElementById('farm-province-field').value;
+    u.farmLat = parseFloat(document.getElementById('farm-lat').value) || null;
+    u.farmLng = parseFloat(document.getElementById('farm-lng').value) || null;
+
+    if (!u.farmProvince) {
+      showToast('Please select your farm province.');
+      return;
+    }
+  }
+
+  document.getElementById('profile-name-display').textContent = u.name;
+  document.getElementById('profile-avatar-big').textContent = u.name.charAt(0).toUpperCase();
+  document.getElementById('avatar-btn').textContent = u.name.charAt(0).toUpperCase();
+
+  if (App.useFirebase) saveUserToFirebase(u);
+
+  showToast('Profile saved! ✓');
 }
 
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
+// FIREBASE HELPERS (used when configured)
+// ═══════════════════════════════════════
+async function saveUserToFirebase(user) {
+  if (!window._db || !window._firebase) return;
+  try {
+    const { doc, setDoc } = window._firebase;
+    await setDoc(doc(window._db, 'users', user.id), {
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      phone: user.phone || '',
+      address: user.address || '',
+      city: user.city || '',
+      province: user.province || '',
+      wallet: user.wallet || 0,
+      farmAddress: user.farmAddress || '',
+      farmCity: user.farmCity || '',
+      farmProvince: user.farmProvince || '',
+      farmLat: user.farmLat || null,
+      farmLng: user.farmLng || null,
+    });
+  } catch(e) {
+    console.warn('Firebase save failed:', e);
+  }
+}
+
+// ═══════════════════════════════════════
 // TOAST
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════
 let _toastTimer;
 function showToast(msg) {
   const el = document.getElementById('toast');
@@ -2379,10 +2302,11 @@ function showToast(msg) {
   _toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
 }
 
-// ════════════════════════════════════════════════
-// START
-// ════════════════════════════════════════════════
-init();
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+renderProducts();
 </script>
 </body>
 </html>
+
