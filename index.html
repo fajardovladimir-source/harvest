@@ -1,0 +1,2388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HarvestGo — Farm to Table Marketplace</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Leaflet.js for the map (no API key needed) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --forest: #0d2b1f;
+    --deep: #143321;
+    --mid: #1e4d35;
+    --leaf: #2a6b47;
+    --sage: #3d8c5e;
+    --mint: #5aad7a;
+    --pale: #e8f5ee;
+    --cream: #f7faf8;
+    --gold: #c9a84c;
+    --gold-light: #e8c96e;
+    --white: #ffffff;
+    --text-dark: #0d1f17;
+    --text-mid: #2d4a39;
+    --text-soft: #5a7a68;
+    --text-ghost: #8eaa9d;
+    --border: rgba(42,107,71,0.18);
+    --border-strong: rgba(42,107,71,0.35);
+    --shadow-sm: 0 2px 12px rgba(13,43,31,0.10);
+    --shadow-md: 0 6px 32px rgba(13,43,31,0.14);
+    --shadow-lg: 0 16px 64px rgba(13,43,31,0.18);
+    --radius: 14px;
+    --radius-sm: 8px;
+    --radius-lg: 24px;
+    --red: #e53e3e;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text-dark); min-height: 100vh; overflow-x: hidden; }
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ─── LANDING ─── */
+  #screen-landing { background: var(--forest); align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .landing-bg { position: absolute; inset: 0; overflow: hidden; }
+  .landing-bg::before { content: ''; position: absolute; width: 800px; height: 800px; background: radial-gradient(circle, rgba(42,107,71,0.25) 0%, transparent 70%); top: -200px; right: -200px; border-radius: 50%; }
+  .landing-bg::after { content: ''; position: absolute; width: 600px; height: 600px; background: radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%); bottom: -150px; left: -100px; border-radius: 50%; }
+  .landing-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(42,107,71,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(42,107,71,0.06) 1px, transparent 1px); background-size: 48px 48px; }
+  .landing-center { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 24px; max-width: 560px; animation: fadeUp 0.8s ease both; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+  .logo-mark { width: 72px; height: 72px; background: linear-gradient(135deg, var(--sage), var(--gold)); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 24px; box-shadow: 0 8px 32px rgba(201,168,76,0.3); }
+  .landing-title { font-family: 'Playfair Display', serif; font-size: clamp(36px, 7vw, 58px); color: var(--white); font-weight: 700; line-height: 1.08; letter-spacing: -0.5px; margin-bottom: 14px; }
+  .landing-title span { color: var(--gold-light); }
+  .landing-sub { font-size: 15px; color: rgba(255,255,255,0.6); line-height: 1.65; max-width: 400px; margin-bottom: 44px; }
+  .landing-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .btn-primary { background: linear-gradient(135deg, var(--sage) 0%, var(--leaf) 100%); color: var(--white); border: none; padding: 14px 34px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; letter-spacing: 0.2px; box-shadow: 0 4px 20px rgba(42,107,71,0.4); transition: transform 0.2s, box-shadow 0.2s; }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(42,107,71,0.5); }
+  .btn-outline { background: transparent; color: var(--white); border: 1.5px solid rgba(255,255,255,0.35); padding: 14px 34px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+  .btn-outline:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.6); }
+  .landing-badges { display: flex; gap: 24px; margin-top: 52px; }
+  .badge { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .badge-num { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--gold-light); }
+  .badge-label { font-size: 11px; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ─── AUTH ─── */
+  #screen-auth { background: var(--forest); align-items: center; justify-content: center; padding: 24px; position: relative; }
+  #screen-auth .landing-bg { position: absolute; inset: 0; }
+  .auth-card { position: relative; z-index: 2; background: var(--white); border-radius: var(--radius-lg); width: 100%; max-width: 480px; padding: 44px 40px; box-shadow: var(--shadow-lg); animation: fadeUp 0.5s ease both; max-height: 92vh; overflow-y: auto; }
+  .auth-card-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+  .auth-card-logo .mini-mark { width: 40px; height: 40px; background: linear-gradient(135deg, var(--sage), var(--gold)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .auth-card-logo span { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--forest); }
+  .auth-title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
+  .auth-subtitle { font-size: 14px; color: var(--text-soft); margin-bottom: 28px; }
+  .role-tabs { display: flex; gap: 0; background: var(--pale); border-radius: 10px; padding: 4px; margin-bottom: 24px; }
+  .role-tab { flex: 1; padding: 10px 0; text-align: center; font-size: 13.5px; font-weight: 500; color: var(--text-soft); cursor: pointer; border-radius: 8px; transition: all 0.2s; border: none; background: none; }
+  .role-tab.active { background: var(--white); color: var(--forest); font-weight: 600; box-shadow: var(--shadow-sm); }
+  .form-group { margin-bottom: 18px; }
+  .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-mid); margin-bottom: 7px; letter-spacing: 0.2px; }
+  .form-input { width: 100%; padding: 12px 16px; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14.5px; color: var(--text-dark); background: var(--cream); outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+  .form-input:focus { border-color: var(--sage); box-shadow: 0 0 0 3px rgba(90,173,122,0.15); }
+  .form-input::placeholder { color: var(--text-ghost); }
+  .pass-wrap { position: relative; }
+  .pass-wrap .form-input { padding-right: 44px; }
+  .pass-eye { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text-soft); background: none; border: none; display: flex; align-items: center; justify-content: center; padding: 2px; transition: color 0.2s; }
+  .pass-eye:hover { color: var(--sage); }
+  .pass-eye svg { width: 20px; height: 20px; }
+  .divider { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; font-size: 12px; color: var(--text-ghost); }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .btn-full { width: 100%; padding: 13px; background: linear-gradient(135deg, var(--mid) 0%, var(--leaf) 100%); color: var(--white); border: none; border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.15s; letter-spacing: 0.2px; }
+  .btn-full:hover { opacity: 0.92; transform: translateY(-1px); }
+  .btn-full:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .auth-switch { text-align: center; margin-top: 18px; font-size: 13.5px; color: var(--text-soft); }
+  .auth-switch a { color: var(--sage); font-weight: 600; cursor: pointer; text-decoration: none; }
+  .auth-switch a:hover { color: var(--leaf); text-decoration: underline; }
+  .form-row { display: flex; gap: 14px; }
+  .form-row .form-group { flex: 1; }
+  .err-text { font-size: 12px; color: var(--red); margin-top: 4px; display: none; }
+  .err-text.show { display: block; }
+
+  /* ─── MODAL ─── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(13,43,31,0.65); backdrop-filter: blur(6px); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal-card { background: var(--white); border-radius: var(--radius-lg); padding: 36px 32px; max-width: 500px; width: 100%; box-shadow: var(--shadow-lg); animation: fadeUp 0.35s ease; position: relative; max-height: 90vh; overflow-y: auto; }
+  .modal-close { position: absolute; top: 16px; right: 18px; background: none; border: none; font-size: 22px; color: var(--text-ghost); cursor: pointer; line-height: 1; transition: color 0.2s; }
+  .modal-close:hover { color: var(--text-dark); }
+  .modal-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
+  .modal-sub { font-size: 13px; color: var(--text-soft); margin-bottom: 24px; }
+
+  /* ─── MAP ─── */
+  #farm-map, #location-view-map { height: 280px; border-radius: var(--radius-sm); overflow: hidden; border: 1.5px solid var(--border-strong); margin-bottom: 12px; }
+  .map-instructions { background: var(--pale); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: var(--text-mid); margin-bottom: 12px; }
+  .map-instructions strong { color: var(--forest); }
+  .location-display { display: flex; align-items: center; gap: 10px; background: var(--pale); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: var(--text-mid); margin-top: 8px; }
+
+  /* ─── APP HEADER ─── */
+  #screen-app { background: var(--cream); }
+  .app-header { background: var(--forest); padding: 0 32px; height: 64px; display: flex; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 16px rgba(13,43,31,0.25); }
+  .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; cursor: pointer; margin-right: 32px; }
+  .header-logo .mini-mark { width: 34px; height: 34px; background: linear-gradient(135deg, var(--sage), var(--gold)); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .header-logo span { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; color: var(--white); }
+  .header-nav { display: flex; gap: 4px; flex: 1; }
+  .nav-btn { background: none; border: none; color: rgba(255,255,255,0.6); font-family: 'DM Sans', sans-serif; font-size: 13.5px; font-weight: 500; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: color 0.2s, background 0.2s; position: relative; }
+  .nav-btn:hover { color: var(--white); background: rgba(255,255,255,0.08); }
+  .nav-btn.active { color: var(--white); background: rgba(255,255,255,0.12); font-weight: 600; }
+  .nav-notif { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background: var(--gold); border-radius: 50%; }
+  .header-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+  .wallet-badge { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.1); padding: 6px 14px; border-radius: 50px; font-size: 13px; font-weight: 600; color: var(--gold-light); cursor: pointer; transition: background 0.2s; }
+  .wallet-badge:hover { background: rgba(255,255,255,0.15); }
+  .cart-btn { background: rgba(255,255,255,0.1); border: none; color: var(--white); width: 38px; height: 38px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; transition: background 0.2s; }
+  .cart-btn:hover { background: rgba(255,255,255,0.18); }
+  .cart-count { position: absolute; top: -3px; right: -3px; background: var(--gold); color: var(--forest); font-size: 10px; font-weight: 700; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .avatar-btn { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--sage), var(--gold)); border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 700; color: var(--white); display: flex; align-items: center; justify-content: center; }
+
+  /* ─── PAGES ─── */
+  .page { display: none; flex: 1; overflow-y: auto; }
+  .page.active { display: block; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+  /* ─── SHOP ─── */
+  .hero-strip { background: linear-gradient(135deg, var(--forest) 0%, var(--deep) 60%, var(--mid) 100%); padding: 48px 32px; text-align: center; position: relative; overflow: hidden; }
+  .hero-strip::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 60% 50%, rgba(201,168,76,0.12) 0%, transparent 70%); }
+  .hero-strip h1 { font-family: 'Playfair Display', serif; font-size: clamp(26px, 4vw, 42px); color: var(--white); font-weight: 700; margin-bottom: 10px; position: relative; }
+  .hero-strip h1 span { color: var(--gold-light); }
+  .hero-strip p { font-size: 15px; color: rgba(255,255,255,0.6); position: relative; }
+  .search-bar { display: flex; gap: 0; max-width: 540px; margin: 24px auto 0; position: relative; }
+  .search-bar input { flex: 1; padding: 13px 18px; border: none; border-radius: var(--radius-sm) 0 0 var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
+  .search-bar button { padding: 13px 22px; background: var(--gold); color: var(--forest); border: none; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-weight: 600; font-size: 14px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.2s; }
+  .search-bar button:hover { background: var(--gold-light); }
+  .filter-row { display: flex; gap: 10px; flex-wrap: wrap; padding: 20px 24px 0; max-width: 1200px; margin: 0 auto; }
+  .filter-chip { padding: 7px 16px; border-radius: 50px; border: 1.5px solid var(--border-strong); background: var(--white); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; color: var(--text-mid); }
+  .filter-chip.active, .filter-chip:hover { background: var(--forest); color: var(--white); border-color: var(--forest); }
+  .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 22px; padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .product-card { background: var(--white); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); transition: transform 0.25s, box-shadow 0.25s; cursor: pointer; border: 1px solid var(--border); }
+  .product-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+  .product-img { height: 160px; display: flex; align-items: center; justify-content: center; font-size: 60px; background: linear-gradient(135deg, var(--pale) 0%, var(--cream) 100%); position: relative; overflow: hidden; }
+  .product-img img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+  .product-img .emoji-fallback { font-size: 60px; position: relative; z-index: 1; }
+  .product-badge { position: absolute; top: 10px; left: 10px; background: var(--sage); color: white; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.4px; z-index: 2; }
+  .product-badge.organic { background: var(--gold); color: var(--forest); }
+  .product-info { padding: 16px; }
+  .product-name { font-weight: 600; font-size: 15px; color: var(--text-dark); margin-bottom: 4px; }
+  .product-farmer { font-size: 12px; color: var(--text-ghost); margin-bottom: 10px; }
+  .product-farmer a { color: var(--sage); cursor: pointer; text-decoration: none; font-weight: 500; }
+  .product-footer { display: flex; align-items: center; justify-content: space-between; }
+  .product-price { font-family: 'Playfair Display', serif; font-size: 19px; font-weight: 700; color: var(--forest); }
+  .product-price small { font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 400; color: var(--text-ghost); }
+  .add-btn { width: 34px; height: 34px; background: var(--forest); border: none; border-radius: 50%; color: var(--white); font-size: 20px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, transform 0.15s; }
+  .add-btn:hover { background: var(--sage); transform: scale(1.1); }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-ghost); }
+  .empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-state p { font-size: 15px; }
+
+  /* ─── SECTION HEADERS ─── */
+  .section-header { display: flex; align-items: baseline; gap: 12px; padding: 28px 24px 12px; max-width: 1200px; margin: 0 auto; }
+  .section-header h2 { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--text-dark); }
+  .section-header span { font-size: 13px; color: var(--text-ghost); }
+
+  /* ─── WALLET ─── */
+  .wallet-card { background: linear-gradient(135deg, var(--forest) 0%, var(--deep) 70%); border-radius: var(--radius); padding: 28px; color: white; position: relative; overflow: hidden; }
+  .wallet-card::before { content: ''; position: absolute; width: 200px; height: 200px; background: radial-gradient(circle, rgba(201,168,76,0.2) 0%, transparent 70%); top: -60px; right: -40px; border-radius: 50%; }
+  .wallet-card-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.5); margin-bottom: 8px; }
+  .wallet-card-amount { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 700; color: var(--gold-light); position: relative; }
+  .wallet-card-sub { font-size: 12.5px; color: rgba(255,255,255,0.5); margin-top: 6px; }
+  .topup-row { margin-top: 20px; display: flex; gap: 12px; }
+  .btn-gold { padding: 10px 22px; background: var(--gold); color: var(--forest); border: none; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 13.5px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+  .btn-gold:hover { background: var(--gold-light); }
+
+  /* ─── ORDERS ─── */
+  .orders-list { max-width: 800px; margin: 0 auto; padding: 0 24px 32px; }
+  .order-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 22px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+  .order-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+  .order-id { font-size: 12px; font-weight: 600; color: var(--text-ghost); text-transform: uppercase; letter-spacing: 0.5px; }
+  .order-date { font-size: 12px; color: var(--text-ghost); }
+  .order-status { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+  .status-processing { background: rgba(201,168,76,0.15); color: #8a6f1e; }
+  .status-confirmed { background: rgba(42,107,71,0.12); color: var(--leaf); }
+  .status-paid { background: rgba(42,107,71,0.12); color: var(--leaf); }
+  .status-completed { background: rgba(42,107,71,0.2); color: var(--deep); }
+  .status-pending { background: rgba(150,150,150,0.1); color: #666; }
+  .order-track { display: flex; align-items: center; gap: 0; margin: 14px 0; }
+  .track-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .track-dot { width: 28px; height: 28px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 13px; position: relative; z-index: 1; transition: background 0.3s; }
+  .track-dot.done { background: var(--sage); }
+  .track-dot.active { background: var(--gold); box-shadow: 0 0 0 4px rgba(201,168,76,0.2); }
+  .track-line { flex: 1; height: 3px; background: var(--border); margin-top: -20px; transition: background 0.3s; }
+  .track-line.done { background: var(--sage); }
+  .track-label { font-size: 11px; color: var(--text-ghost); text-align: center; }
+  .track-label.active { color: var(--text-dark); font-weight: 600; }
+  .order-items { font-size: 13.5px; color: var(--text-mid); margin-bottom: 4px; }
+  .order-total { font-weight: 700; font-size: 15px; color: var(--forest); margin-top: 8px; }
+  .order-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn-sm { padding: 8px 18px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+  .btn-confirm { background: var(--sage); color: white; }
+  .btn-confirm:hover { background: var(--leaf); }
+  .btn-msg { background: var(--pale); color: var(--leaf); border: 1px solid var(--border-strong); }
+  .btn-msg:hover { background: var(--border); }
+  .btn-pay { background: linear-gradient(135deg, #0075FF, #00C2FF); color: white; }
+  .btn-pay:hover { opacity: 0.9; }
+
+  /* ─── SELL ─── */
+  .sell-form-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 28px; max-width: 640px; margin: 0 auto; box-shadow: var(--shadow-sm); }
+  .sell-form-card h3 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--text-dark); margin-bottom: 22px; }
+  .emoji-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .emoji-opt { width: 42px; height: 42px; font-size: 22px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 2px solid var(--border); cursor: pointer; transition: border-color 0.2s, background 0.2s; background: var(--cream); }
+  .emoji-opt.selected { border-color: var(--sage); background: var(--pale); }
+  textarea.form-input { resize: vertical; min-height: 80px; }
+  select.form-input { cursor: pointer; }
+  .img-upload-area { border: 2px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 24px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: var(--cream); position: relative; overflow: hidden; }
+  .img-upload-area:hover { border-color: var(--sage); background: var(--pale); }
+  .img-upload-area.has-img { border-style: solid; border-color: var(--sage); padding: 0; height: 160px; }
+  .img-upload-area.has-img img { width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--radius-sm) - 2px); display: block; }
+  .img-upload-area input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .img-upload-icon { font-size: 32px; margin-bottom: 8px; }
+  .img-upload-text { font-size: 13px; color: var(--text-soft); }
+  .img-upload-text strong { color: var(--sage); }
+  .img-remove-btn { position: absolute; top: 8px; right: 8px; background: rgba(13,43,31,0.7); color: white; border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 3; transition: background 0.2s; }
+  .img-remove-btn:hover { background: rgba(200,50,50,0.85); }
+  .product-preview-card { background: var(--pale); border: 1.5px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; }
+  .product-preview-card .preview-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-ghost); padding: 8px 14px 0; }
+  .product-preview-inner { display: flex; gap: 14px; padding: 12px 14px; align-items: center; }
+  .preview-img { width: 60px; height: 60px; border-radius: 10px; background: var(--white); display: flex; align-items: center; justify-content: center; font-size: 28px; overflow: hidden; flex-shrink: 0; }
+  .preview-img img { width: 100%; height: 100%; object-fit: cover; }
+  .preview-info .preview-name { font-weight: 700; font-size: 15px; color: var(--text-dark); }
+  .preview-info .preview-price { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; color: var(--forest); margin-top: 2px; }
+  .preview-info .preview-stock { font-size: 12px; color: var(--text-ghost); margin-top: 2px; }
+
+  /* ─── MESSAGES ─── */
+  .msg-layout { display: flex; height: calc(100vh - 64px); }
+  .msg-sidebar { width: 300px; min-width: 260px; background: var(--white); border-right: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; }
+  .msg-sidebar-header { padding: 18px 16px 12px; border-bottom: 1px solid var(--border); }
+  .msg-sidebar-header h3 { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; color: var(--text-dark); }
+  .msg-thread { padding: 14px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s; display: flex; gap: 12px; align-items: flex-start; }
+  .msg-thread:hover, .msg-thread.active { background: var(--pale); }
+  .msg-avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--sage), var(--leaf)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+  .msg-thread-info { flex: 1; min-width: 0; }
+  .msg-thread-name { font-size: 13.5px; font-weight: 600; color: var(--text-dark); }
+  .msg-thread-preview { font-size: 12px; color: var(--text-ghost); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .msg-thread-time { font-size: 11px; color: var(--text-ghost); }
+  .msg-unread { width: 8px; height: 8px; background: var(--sage); border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .msg-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .msg-header { padding: 16px 22px; border-bottom: 1px solid var(--border); background: var(--white); display: flex; align-items: center; justify-content: space-between; }
+  .msg-header-name { font-weight: 600; font-size: 15px; color: var(--text-dark); }
+  .msg-header-info { font-size: 12px; color: var(--text-soft); }
+  .msg-contact-btn { display: flex; align-items: center; gap: 6px; padding: 7px 16px; background: var(--pale); border: 1px solid var(--border-strong); border-radius: 50px; font-size: 12.5px; font-weight: 500; color: var(--text-mid); cursor: pointer; transition: background 0.2s; }
+  .msg-contact-btn:hover { background: var(--border); }
+  .msg-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .bubble { max-width: 72%; }
+  .bubble.me { align-self: flex-end; }
+  .bubble-text { padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; }
+  .bubble.them .bubble-text { background: var(--white); border: 1px solid var(--border); color: var(--text-dark); border-radius: 4px 16px 16px 16px; }
+  .bubble.me .bubble-text { background: var(--forest); color: white; border-radius: 16px 4px 16px 16px; }
+  .bubble-time { font-size: 11px; color: var(--text-ghost); margin-top: 4px; }
+  .bubble.me .bubble-time { text-align: right; }
+  .msg-input-area { padding: 16px 20px; border-top: 1px solid var(--border); background: var(--white); display: flex; gap: 12px; align-items: center; }
+  .msg-input { flex: 1; padding: 10px 16px; border: 1.5px solid var(--border-strong); border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  .msg-input:focus { border-color: var(--sage); }
+  .msg-send { width: 40px; height: 40px; background: var(--forest); border: none; border-radius: 50%; color: white; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+  .msg-send:hover { background: var(--sage); }
+  .msg-empty { display: flex; align-items: center; justify-content: center; flex: 1; }
+  .msg-empty-inner { text-align: center; color: var(--text-ghost); }
+  .msg-empty-inner .big-icon { font-size: 48px; margin-bottom: 12px; }
+  .msg-no-threads { text-align: center; padding: 40px 16px; color: var(--text-ghost); font-size: 13px; }
+
+  /* ─── CONTACT PAGE ─── */
+  .contact-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+  .contact-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 24px; box-shadow: var(--shadow-sm); }
+  .contact-card h3 { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; color: var(--text-dark); margin-bottom: 14px; }
+  .contact-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--text-mid); }
+  .contact-item:last-child { border-bottom: none; }
+  .contact-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--pale); display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+  .contact-item a { color: var(--sage); text-decoration: none; font-weight: 500; }
+  .contact-item a:hover { text-decoration: underline; }
+
+  /* ─── TOPUP STEPS ─── */
+  .topup-steps { display: flex; gap: 8px; margin-bottom: 24px; }
+  .topup-step { flex: 1; padding: 8px; text-align: center; border-radius: 8px; font-size: 12px; font-weight: 600; background: var(--pale); color: var(--text-ghost); }
+  .topup-step.active { background: var(--forest); color: white; }
+  .topup-step.done { background: var(--sage); color: white; }
+  .topup-step-panel { display: none; }
+  .topup-step-panel.active { display: block; }
+  .qr-placeholder { background: var(--pale); border: 2px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 32px; text-align: center; margin-bottom: 16px; }
+  .qr-placeholder .qr-icon { font-size: 48px; margin-bottom: 8px; }
+  .qr-placeholder p { font-size: 13px; color: var(--text-soft); }
+  .qr-amount-display { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; color: var(--forest); text-align: center; margin-bottom: 4px; }
+  .qr-ref { text-align: center; font-size: 12px; color: var(--text-ghost); margin-bottom: 20px; font-family: 'DM Mono', monospace; }
+
+  /* ─── ADMIN ─── */
+  .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .stat-card { background: var(--white); border-radius: var(--radius); padding: 22px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+  .stat-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-ghost); margin-bottom: 10px; }
+  .stat-value { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; color: var(--forest); }
+  .stat-sub { font-size: 12px; color: var(--text-ghost); margin-top: 4px; }
+  .admin-table-wrap { overflow-x: auto; padding: 0 24px 32px; max-width: 1100px; margin: 0 auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--white); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+  thead { background: var(--forest); }
+  thead th { padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.7); }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:hover { background: var(--pale); }
+  tbody td { padding: 13px 16px; font-size: 13.5px; color: var(--text-mid); }
+  .td-bold { font-weight: 600; color: var(--text-dark); }
+
+  /* ─── CART DRAWER ─── */
+  .cart-drawer { position: fixed; right: 0; top: 0; bottom: 0; width: 380px; background: var(--white); box-shadow: -8px 0 40px rgba(13,43,31,0.18); z-index: 500; transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.4,0,0.2,1); display: flex; flex-direction: column; }
+  .cart-drawer.open { transform: translateX(0); }
+  .drawer-overlay { position: fixed; inset: 0; background: rgba(13,43,31,0.4); z-index: 499; display: none; }
+  .drawer-overlay.open { display: block; }
+  .cart-header { padding: 20px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .cart-header h3 { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; color: var(--text-dark); }
+  .cart-header button { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-ghost); }
+  .cart-items { flex: 1; overflow-y: auto; padding: 16px; }
+  .cart-item { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .cart-item-img { font-size: 30px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--pale); overflow: hidden; flex-shrink: 0; }
+  .cart-item-img img { width: 100%; height: 100%; object-fit: cover; }
+  .cart-item-info { flex: 1; }
+  .cart-item-name { font-weight: 600; font-size: 14px; color: var(--text-dark); }
+  .cart-item-price { font-size: 13px; color: var(--text-soft); }
+  .qty-control { display: flex; align-items: center; gap: 6px; }
+  .qty-btn { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--border-strong); background: none; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--text-dark); display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
+  .qty-btn:hover { background: var(--pale); }
+  .qty-num { font-size: 14px; font-weight: 600; min-width: 20px; text-align: center; }
+  .cart-footer { padding: 18px 20px; border-top: 1px solid var(--border); }
+  .cart-total-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 14px; color: var(--text-mid); }
+  .cart-total-row.grand { font-size: 16px; font-weight: 700; color: var(--text-dark); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); margin-bottom: 14px; }
+
+  /* ─── SHOPEE-STYLE CHECKOUT ─── */
+  .checkout-section { margin-bottom: 16px; }
+  .checkout-section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-ghost); margin-bottom: 8px; display: block; }
+  .address-display { display: flex; align-items: flex-start; gap: 10px; background: var(--pale); border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13.5px; color: var(--text-mid); }
+  .address-display .addr-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .address-display .addr-info { flex: 1; }
+  .address-display .addr-name { font-weight: 600; color: var(--text-dark); font-size: 14px; }
+  .address-change-btn { font-size: 12px; color: var(--sage); font-weight: 600; cursor: pointer; text-decoration: underline; margin-top: 4px; display: inline-block; }
+  .address-missing { background: rgba(229,62,62,0.07); border: 1.5px solid rgba(229,62,62,0.3); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13px; color: #c53030; display: flex; align-items: center; gap: 8px; }
+  .pay-method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pay-method-card { border: 2px solid var(--border-strong); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; transition: all 0.2s; background: var(--cream); display: flex; align-items: center; gap: 10px; }
+  .pay-method-card:hover { border-color: var(--sage); background: var(--pale); }
+  .pay-method-card.selected { border-color: var(--forest); background: var(--pale); }
+  .pay-method-card.selected .pay-method-check { opacity: 1; }
+  .pay-method-icon { font-size: 20px; }
+  .pay-method-info { flex: 1; }
+  .pay-method-name { font-size: 13px; font-weight: 600; color: var(--text-dark); }
+  .pay-method-desc { font-size: 11px; color: var(--text-ghost); margin-top: 1px; }
+  .pay-method-check { width: 18px; height: 18px; border-radius: 50%; background: var(--forest); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; flex-shrink: 0; }
+  .pay-method-check::after { content: '✓'; font-size: 10px; color: white; font-weight: 700; }
+
+  /* ─── PROFILE ─── */
+  .profile-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 28px; box-shadow: var(--shadow-sm); }
+
+  /* ─── TOAST ─── */
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: var(--forest); color: white; padding: 12px 22px; border-radius: 50px; font-size: 13.5px; font-weight: 500; box-shadow: var(--shadow-md); z-index: 9999; display: none; white-space: nowrap; }
+  .toast.show { display: flex; align-items: center; gap: 8px; animation: toastIn 0.3s ease; }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+  /* ─── UTILS ─── */
+  .notice { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.3); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 13px; color: #7a5c12; margin-bottom: 18px; }
+  .notice strong { color: #5a4008; }
+  .notice-red { background: rgba(229,62,62,0.08); border: 1px solid rgba(229,62,62,0.25); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 13px; color: #c53030; margin-bottom: 18px; }
+  .txn-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .txn-row:last-child { border-bottom: none; }
+  .txn-type { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 20px; }
+  .txn-credit { background: rgba(42,107,71,0.1); color: var(--leaf); }
+  .txn-debit { background: rgba(229,62,62,0.1); color: #c53030; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .mt-24 { margin-top: 24px; }
+
+  /* ─── LOADING ─── */
+  .db-loading { position: fixed; inset: 0; background: var(--forest); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; color: white; }
+  .db-loading .spin { width: 48px; height: 48px; border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px; }
+  .db-loading p { font-size: 15px; color: rgba(255,255,255,0.7); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── DB CONFIG BANNER ─── */
+  .db-config-banner { position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a2e; color: #e2c776; padding: 12px 20px; font-size: 13px; font-family: 'DM Mono', monospace; z-index: 9998; display: flex; align-items: center; gap: 12px; border-top: 2px solid #c9a84c; }
+  .db-config-banner strong { color: white; }
+
+  @media (max-width: 640px) {
+    .auth-card { padding: 32px 22px; }
+    .form-row { flex-direction: column; gap: 0; }
+    .app-header { padding: 0 16px; }
+    .header-nav { display: none; }
+    .products-grid { padding: 14px; gap: 14px; }
+    .msg-sidebar { width: 100%; }
+    .msg-layout { flex-direction: column; }
+    .cart-drawer { width: 100%; }
+    .pay-method-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div class="db-loading" id="db-loading">
+  <div class="logo-mark" style="margin-bottom:20px">🌿</div>
+  <div class="spin"></div>
+   <p id="status">Connecting to database...</p>
+</div>
+
+<!-- ══════════════ LANDING ══════════════ -->
+<div id="screen-landing" class="screen">
+  <div class="landing-bg"><div class="landing-grid"></div></div>
+  <div class="landing-center">
+    <div class="logo-mark">🌿</div>
+    <h1 class="landing-title">Farm-Fresh,<br><span>Delivered.</span></h1>
+    <p class="landing-sub">HarvestGo connects local farmers directly to consumers. Premium fruits &amp; vegetables — traceable, fresh, and fairly priced.</p>
+    <div class="landing-btns">
+      <button class="btn-primary" onclick="goToAuth('login')">Sign In</button>
+      <button class="btn-outline" onclick="goToAuth('register')">Create Account</button>
+    </div>
+    <div class="landing-badges">
+      <div class="badge"><span class="badge-num" id="stat-farmers">—</span><span class="badge-label">Farmers</span></div>
+      <div class="badge"><span class="badge-num" id="stat-consumers">—</span><span class="badge-label">Customers</span></div>
+      <div class="badge"><span class="badge-num">98%</span><span class="badge-label">Satisfaction</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ AUTH ══════════════ -->
+<div id="screen-auth" class="screen">
+  <div class="landing-bg"><div class="landing-grid"></div></div>
+  <div class="auth-card" id="auth-card">
+    <div class="auth-card-logo">
+      <div class="mini-mark">🌿</div>
+      <span>HarvestGo</span>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="form-login">
+      <h2 class="auth-title">Welcome Back</h2>
+      <p class="auth-subtitle">Sign in to your account to continue</p>
+      <div class="role-tabs">
+        <button class="role-tab active" onclick="setLoginRole('consumer', this)">Consumer</button>
+        <button class="role-tab" onclick="setLoginRole('farmer', this)">Farmer</button>
+        <button class="role-tab" onclick="setLoginRole('admin', this)">Admin</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" id="login-email" placeholder="you@example.com" autocomplete="off">
+        <div class="err-text" id="err-login-email">Please enter a valid email.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="pass-wrap">
+          <input type="password" class="form-input" id="login-pass" placeholder="Enter your password" autocomplete="off" onkeydown="if(event.key==='Enter')handleLogin()">
+          <button class="pass-eye" onclick="togglePass('login-pass',this)" tabindex="-1">
+            <svg id="eye-login-pass-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg id="eye-login-pass-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+        <div class="err-text" id="err-login-pass">Incorrect email or password.</div>
+      </div>
+      <button class="btn-full" id="login-btn" onclick="handleLogin()">Sign In</button>
+      <p class="auth-switch">Don't have an account? <a onclick="switchForm('register')">Create one</a></p>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="form-register" style="display:none">
+      <h2 class="auth-title">Create Account</h2>
+      <p class="auth-subtitle">Join HarvestGo as a consumer or farmer</p>
+      <div class="role-tabs">
+        <button class="role-tab active" onclick="setRegRole('consumer', this)">Consumer</button>
+        <button class="role-tab" onclick="setRegRole('farmer', this)">Farmer</button>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">First Name</label>
+          <input type="text" class="form-input" id="reg-fname" placeholder="Maria" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Last Name</label>
+          <input type="text" class="form-input" id="reg-lname" placeholder="Santos" autocomplete="off">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" class="form-input" id="reg-email" placeholder="you@email.com" autocomplete="off">
+        <div class="err-text" id="err-reg-email">Please enter a valid email address.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone Number</label>
+        <input type="tel" class="form-input" id="reg-phone" placeholder="+63 9XX XXX XXXX" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="pass-wrap">
+          <input type="password" class="form-input" id="reg-pass" placeholder="At least 8 characters" autocomplete="new-password">
+          <button class="pass-eye" onclick="togglePass('reg-pass',this)" tabindex="-1">
+            <svg id="eye-reg-pass-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg id="eye-reg-pass-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirm Password</label>
+        <div class="pass-wrap">
+          <input type="password" class="form-input" id="reg-pass2" placeholder="Confirm your password" autocomplete="new-password">
+          <button class="pass-eye" onclick="togglePass('reg-pass2',this)" tabindex="-1">
+            <svg id="eye-reg-pass2-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg id="eye-reg-pass2-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+        <div class="err-text" id="err-reg-pass2">Passwords do not match.</div>
+      </div>
+      <button class="btn-full" id="reg-btn" onclick="handleRegister()">Create Account</button>
+      <p class="auth-switch">Already have an account? <a onclick="switchForm('login')">Sign in</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MAIN APP ══════════════ -->
+<div id="screen-app" class="screen">
+  <header class="app-header">
+    <div class="header-logo" onclick="showPage('shop')">
+      <div class="mini-mark">🌿</div>
+      <span>HarvestGo</span>
+    </div>
+    <nav class="header-nav" id="main-nav"></nav>
+    <div class="header-actions">
+      <div class="wallet-badge" id="wallet-display" style="display:none" onclick="showPage('wallet')">
+        ₱<span id="wallet-amount">0.00</span>
+      </div>
+      <button class="cart-btn" id="cart-toggle-btn" onclick="toggleCart()" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        <span class="cart-count" id="cart-count">0</span>
+      </button>
+      <button class="avatar-btn" id="avatar-btn" onclick="showPage('profile')">U</button>
+    </div>
+  </header>
+
+  <!-- SHOP PAGE -->
+  <div class="page active" id="page-shop">
+    <div class="hero-strip">
+      <h1>Fresh <span>Fruits & Vegetables</span></h1>
+      <p>Sourced directly from local farmers across the Philippines</p>
+      <div class="search-bar">
+        <input type="text" id="search-input" placeholder="Search for tomatoes, mangoes..." oninput="filterProducts()">
+        <button onclick="filterProducts()">Search</button>
+      </div>
+    </div>
+    <div class="filter-row">
+      <button class="filter-chip active" onclick="filterCat('all',this)">All</button>
+      <button class="filter-chip" onclick="filterCat('fruits',this)">Fruits</button>
+      <button class="filter-chip" onclick="filterCat('vegetables',this)">Vegetables</button>
+      <button class="filter-chip" onclick="filterCat('leafy',this)">Leafy Greens</button>
+      <button class="filter-chip" onclick="filterCat('root',this)">Root Crops</button>
+    </div>
+    <div class="products-grid" id="products-grid">
+      <div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🌾</div><p>Loading products...</p></div>
+    </div>
+  </div>
+
+  <!-- ORDERS -->
+  <div class="page" id="page-orders">
+    <div class="section-header" id="orders-header"><h2>My Orders</h2><span>Track your deliveries</span></div>
+    <div class="orders-list" id="orders-list"></div>
+  </div>
+
+  <!-- SELL (Farmer) -->
+  <div class="page" id="page-sell">
+    <div class="section-header"><h2>List a Product</h2><span>Add your harvest to the marketplace</span></div>
+    <div style="max-width:640px;margin:0 auto;padding:0 24px 40px">
+      <div class="notice">
+        <strong>Commission Notice:</strong> A 10% platform commission will be deducted from each completed sale. Listing fee: ₱50 per product (deducted from wallet).
+      </div>
+      <div id="wallet-low-notice" class="notice-red" style="display:none">
+        <strong>Low Wallet Balance:</strong> You need at least ₱50 to post a listing. <a onclick="showPage('wallet')" style="color:#c53030;cursor:pointer;text-decoration:underline">Top up your wallet</a>.
+      </div>
+      <div class="sell-form-card">
+        <h3>New Listing</h3>
+        <div class="form-group">
+          <label class="form-label">Product Photo <span style="color:var(--text-ghost);font-weight:400">(optional)</span></label>
+          <div class="img-upload-area" id="img-upload-area" onclick="triggerImgUpload()">
+            <input type="file" id="product-img-input" accept="image/*" onchange="handleImgUpload(event)" onclick="event.stopPropagation()">
+            <div id="img-placeholder">
+              <div class="img-upload-icon">📷</div>
+              <div class="img-upload-text"><strong>Click to upload</strong> or drag &amp; drop<br>JPG, PNG, WEBP — max 5MB</div>
+            </div>
+            <img id="img-preview" style="display:none" alt="Product preview">
+            <button class="img-remove-btn" id="img-remove-btn" style="display:none" onclick="removeImg(event)" title="Remove image">✕</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Or choose an icon</label>
+          <div class="emoji-picker" id="emoji-picker">
+            <div class="emoji-opt selected" onclick="selectEmoji(this,'🍅')">🍅</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🥦')">🥦</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🥕')">🥕</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🌽')">🌽</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🧅')">🧅</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🥬')">🥬</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🍆')">🍆</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🥑')">🥑</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🍇')">🍇</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🍓')">🍓</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🍍')">🍍</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🥭')">🥭</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🍋')">🍋</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🍎')">🍎</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🍌')">🍌</div>
+            <div class="emoji-opt" onclick="selectEmoji(this,'🧄')">🧄</div>
+          </div>
+        </div>
+
+        <!-- FARM LOCATION MAP -->
+        <div class="form-group">
+          <label class="form-label">📍 Farm Location <span style="color:var(--red);font-weight:600">*Required</span></label>
+          <div class="map-instructions">
+            <strong>Click on the map</strong> to drop a pin at your farm's location (Philippines only). You can drag the pin to adjust.
+          </div>
+          <div id="farm-map"></div>
+          <div class="location-display" id="farm-location-display" style="display:none">
+            <span>📍</span>
+            <div>
+              <div id="farm-lat-lng" style="font-weight:600;font-size:13px;color:var(--forest)"></div>
+              <div id="farm-address-display" style="font-size:12px;color:var(--text-ghost);margin-top:2px"></div>
+            </div>
+          </div>
+          <div class="err-text" id="err-farm-location">Please drop a pin on your farm location before listing.</div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Product Name</label>
+            <input type="text" class="form-input" id="sell-name" placeholder="e.g. Sweet Tomatoes" oninput="updatePreview()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select class="form-input" id="sell-cat">
+              <option value="vegetables">Vegetables</option>
+              <option value="fruits">Fruits</option>
+              <option value="leafy">Leafy Greens</option>
+              <option value="root">Root Crops</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Price per unit (₱)</label>
+            <input type="number" class="form-input" id="sell-price" placeholder="0.00" min="1" oninput="updatePreview()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unit</label>
+            <select class="form-input" id="sell-unit">
+              <option value="kg">kg</option>
+              <option value="bundle">bundle</option>
+              <option value="piece">piece</option>
+              <option value="punnet">punnet</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Available Stock</label>
+          <input type="number" class="form-input" id="sell-stock" placeholder="0" min="1" oninput="updatePreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description <span style="color:var(--text-ghost);font-weight:400">(optional)</span></label>
+          <textarea class="form-input" id="sell-desc" placeholder="Tell buyers about your product — freshness, farm location, harvest date..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Is it Organic?</label>
+          <select class="form-input" id="sell-organic">
+            <option value="yes">Yes — Certified Organic</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+        <div class="product-preview-card" id="listing-preview" style="display:none">
+          <div class="preview-label">Preview</div>
+          <div class="product-preview-inner">
+            <div class="preview-img" id="preview-img-box"></div>
+            <div class="preview-info">
+              <div class="preview-name" id="preview-name">Product Name</div>
+              <div class="preview-price" id="preview-price">₱0.00</div>
+              <div class="preview-stock" id="preview-stock">0 available</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-full" onclick="confirmListProduct()">Review &amp; Post Listing</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WALLET -->
+  <div class="page" id="page-wallet">
+    <div class="section-header"><h2>My Wallet</h2><span>Manage your balance</span></div>
+    <div style="max-width:520px;margin:0 auto;padding:0 24px 40px">
+      <div class="wallet-card">
+        <div class="wallet-card-label">Available Balance</div>
+        <div class="wallet-card-amount">₱<span id="wallet-big">0.00</span></div>
+        <div class="wallet-card-sub" id="last-topup-label">No top-ups yet</div>
+        <div class="topup-row">
+          <button class="btn-gold" onclick="openTopup()">Top Up via GCash</button>
+        </div>
+      </div>
+      <div class="mt-24">
+        <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--text-dark);margin-bottom:12px">Transaction History</div>
+        <div id="txn-history" style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);padding:0 20px;box-shadow:var(--shadow-sm)"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MESSAGES -->
+  <div class="page" id="page-messages" style="padding:0">
+    <div class="msg-layout">
+      <div class="msg-sidebar">
+        <div class="msg-sidebar-header"><h3>Messages</h3></div>
+        <div id="thread-list"></div>
+      </div>
+      <div class="msg-main" id="msg-main">
+        <div class="msg-header">
+          <div>
+            <div class="msg-header-name" id="msg-contact-name">Select a conversation</div>
+            <div class="msg-header-info" id="msg-contact-role"></div>
+          </div>
+          <button class="msg-contact-btn" id="msg-contact-info-btn" style="display:none" onclick="showContactModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            Contact Info
+          </button>
+        </div>
+        <div class="msg-body" id="msg-body">
+          <div class="msg-empty"><div class="msg-empty-inner"><div class="big-icon">💬</div><p>Select a conversation to start messaging</p></div></div>
+        </div>
+        <div class="msg-input-area">
+          <input type="text" class="msg-input" id="msg-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMsg()">
+          <button class="msg-send" onclick="sendMsg()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTACT -->
+  <div class="page" id="page-contact">
+    <div class="section-header"><h2>Contact & Support</h2><span>We're here to help</span></div>
+    <div class="container">
+      <div class="contact-grid">
+        <div class="contact-card">
+          <h3>Platform Support</h3>
+          <div class="contact-item"><div class="contact-icon">📞</div><div><div style="font-size:12px;color:var(--text-ghost);margin-bottom:2px">Call us</div><a href="tel:+639171234567">+63 917 123 4567</a></div></div>
+          <div class="contact-item"><div class="contact-icon">✉️</div><div><div style="font-size:12px;color:var(--text-ghost);margin-bottom:2px">Email</div><a href="mailto:support@harvestgo.ph">support@harvestgo.ph</a></div></div>
+          <div class="contact-item"><div class="contact-icon">🕐</div><div>Mon–Sat, 8:00 AM – 8:00 PM</div></div>
+        </div>
+        <div class="contact-card">
+          <h3>Send Us a Message</h3>
+          <div class="form-group mt-8"><label class="form-label">Your Name</label><input type="text" class="form-input" placeholder="Maria Santos"></div>
+          <div class="form-group"><label class="form-label">Message</label><textarea class="form-input" placeholder="How can we help you?" style="min-height:90px;resize:vertical"></textarea></div>
+          <button class="btn-full" onclick="showToast('Message sent! We\'ll reply within 24 hours.')">Send Message</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="page" id="page-profile">
+    <div class="section-header"><h2>My Profile</h2><span>Account settings</span></div>
+    <div style="max-width:520px;margin:0 auto;padding:0 24px 40px">
+      <div class="profile-card">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px">
+          <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--sage),var(--gold));display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:white" id="profile-avatar-big">U</div>
+          <div>
+            <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--text-dark)" id="profile-name-display">User</div>
+            <div style="font-size:13px;color:var(--text-ghost)" id="profile-role-display">Consumer</div>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Full Name</label><input type="text" class="form-input" id="profile-name-field"></div>
+        <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="profile-email-field" readonly style="opacity:0.6"></div>
+        <div class="form-group"><label class="form-label">Phone</label><input type="tel" class="form-input" id="profile-phone-field" placeholder="+63 9XX XXX XXXX"></div>
+        <div class="form-group">
+          <label class="form-label">🏠 Delivery Address <span style="color:var(--red);font-weight:600" id="address-required-tag">*Required to buy</span></label>
+          <input type="text" class="form-input" id="profile-address-field" placeholder="Street, Barangay, City, Province">
+          <div style="font-size:12px;color:var(--text-ghost);margin-top:5px">You must set an address before placing orders.</div>
+        </div>
+        <button class="btn-full" onclick="saveProfile()">Save Changes</button>
+        <button style="width:100%;margin-top:12px;padding:13px;background:none;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;color:var(--text-mid);transition:background 0.2s" onmouseover="this.style.background='var(--pale)'" onmouseout="this.style.background='none'" onclick="logout()">Sign Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="page" id="page-admin">
+    <div class="section-header"><h2>Admin Dashboard</h2><span>Platform overview</span></div>
+    <div class="dashboard-grid" id="admin-stats"></div>
+    <div style="max-width:1100px;margin:0 auto;padding:0 24px 8px">
+      <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--text-dark)">All Transactions</div>
+    </div>
+    <div class="admin-table-wrap">
+      <table id="admin-table">
+        <thead><tr>
+          <th>Order ID</th><th>Buyer</th><th>Farmer</th><th>Product</th>
+          <th>Amount</th><th>Commission (10%)</th><th>Status</th><th>Date</th>
+        </tr></thead>
+        <tbody id="admin-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ CART DRAWER ══════════════ -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="toggleCart()"></div>
+<div class="cart-drawer" id="cart-drawer">
+  <div class="cart-header">
+    <h3>Your Basket 🛒</h3>
+    <button onclick="toggleCart()">✕</button>
+  </div>
+  <div class="cart-items" id="cart-items-list"></div>
+  <div class="cart-footer" id="cart-footer"></div>
+</div>
+
+<!-- ══════════════ TOP UP MODAL ══════════════ -->
+<div class="modal-overlay" id="topup-modal">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeTopup()">✕</button>
+    <div class="modal-title">Top Up Wallet</div>
+    <p class="modal-sub">Add funds via GCash — follow the steps below.</p>
+    <div class="topup-steps">
+      <div class="topup-step active" id="tstep-1">1 · Enter Details</div>
+      <div class="topup-step" id="tstep-2">2 · Scan &amp; Pay</div>
+      <div class="topup-step" id="tstep-3">3 · Confirm</div>
+    </div>
+    <div class="topup-step-panel active" id="topup-panel-1">
+      <div style="display:inline-block;background:linear-gradient(135deg,#0075FF,#00C2FF);color:white;font-weight:700;font-size:15px;padding:10px 20px;border-radius:8px;margin-bottom:20px;letter-spacing:0.5px">GCash</div>
+      <div class="form-group">
+        <label class="form-label">Your GCash Number</label>
+        <input type="tel" class="form-input" id="gcash-num" placeholder="+63 9XX XXX XXXX">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount to Top Up (₱)</label>
+        <input type="number" class="form-input" id="topup-amount" placeholder="0.00" min="100">
+        <div class="err-text" id="err-topup">Minimum top-up is ₱100.</div>
+      </div>
+      <p style="font-size:12px;color:var(--text-ghost);margin-bottom:18px">Minimum top-up: ₱100.</p>
+      <button class="btn-full" onclick="topupStep2()">Continue →</button>
+    </div>
+    <div class="topup-step-panel" id="topup-panel-2">
+      <div class="qr-amount-display" id="qr-amount-display">₱0.00</div>
+      <div class="qr-ref" id="qr-ref">Ref: —</div>
+      <div class="qr-placeholder">
+        <div class="qr-icon">📲</div>
+        <p>Open GCash → Scan QR → Enter amount shown above → Send payment</p>
+        <p style="margin-top:8px;font-weight:600;color:var(--forest)">Receiving No: <span id="qr-gcash-display"></span></p>
+      </div>
+      <p style="font-size:12px;color:var(--text-ghost);margin-bottom:18px;text-align:center">After sending, click "I've Paid" to confirm.</p>
+      <button class="btn-full" onclick="topupStep3()">I've Paid ✓</button>
+      <button onclick="topupBack()" style="width:100%;margin-top:10px;padding:10px;background:none;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;color:var(--text-mid)">← Back</button>
+    </div>
+    <div class="topup-step-panel" id="topup-panel-3">
+      <div style="text-align:center;padding:20px 0">
+        <div style="font-size:56px;margin-bottom:16px">✅</div>
+        <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--forest);margin-bottom:8px">Top-Up Successful!</div>
+        <div style="font-size:14px;color:var(--text-soft);margin-bottom:4px">Added to your wallet:</div>
+        <div style="font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:var(--gold);margin-bottom:20px" id="confirm-amount-display">₱0.00</div>
+        <button class="btn-full" onclick="closeTopup()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ LISTING CONFIRM MODAL ══════════════ -->
+<div class="modal-overlay" id="listing-modal">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeListingModal()">✕</button>
+    <div class="modal-title">Review Your Listing</div>
+    <p class="modal-sub">Confirm the details before posting to the marketplace.</p>
+    <div id="listing-confirm-content" style="margin-bottom:20px"></div>
+    <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:12px 14px;font-size:13px;color:#7a5c12;margin-bottom:18px">
+      <strong>Listing Fee: ₱50.00</strong> will be deducted from your wallet.
+    </div>
+    <button class="btn-full" onclick="doListProduct()">✓ Confirm &amp; Post Listing</button>
+    <button onclick="closeListingModal()" style="width:100%;margin-top:10px;padding:10px;background:none;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;color:var(--text-mid)">Edit Details</button>
+  </div>
+</div>
+
+<!-- ══════════════ PAY ORDER MODAL ══════════════ -->
+<div class="modal-overlay" id="pay-modal">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closePayModal()">✕</button>
+    <div class="modal-title">Pay for Order</div>
+    <p class="modal-sub" id="pay-modal-sub">Complete your payment to confirm the order.</p>
+    <div id="pay-modal-content" style="margin-bottom:20px"></div>
+    <div class="checkout-section">
+      <span class="checkout-section-label">Payment Method</span>
+      <div class="pay-method-grid" id="pay-modal-opts">
+        <div class="pay-method-card selected" onclick="selectPayModal(this,'GCash')">
+          <div class="pay-method-icon">💚</div>
+          <div class="pay-method-info"><div class="pay-method-name">GCash</div><div class="pay-method-desc">Send via GCash app</div></div>
+          <div class="pay-method-check"></div>
+        </div>
+        <div class="pay-method-card" onclick="selectPayModal(this,'Maya')">
+          <div class="pay-method-icon">💜</div>
+          <div class="pay-method-info"><div class="pay-method-name">Maya</div><div class="pay-method-desc">PayMaya transfer</div></div>
+          <div class="pay-method-check"></div>
+        </div>
+        <div class="pay-method-card" onclick="selectPayModal(this,'Online Banking')">
+          <div class="pay-method-icon">🏦</div>
+          <div class="pay-method-info"><div class="pay-method-name">Online Banking</div><div class="pay-method-desc">BDO, BPI, UnionBank</div></div>
+          <div class="pay-method-check"></div>
+        </div>
+        <div class="pay-method-card" onclick="selectPayModal(this,'COD')">
+          <div class="pay-method-icon">💵</div>
+          <div class="pay-method-info"><div class="pay-method-name">Cash on Delivery</div><div class="pay-method-desc">Pay when you receive</div></div>
+          <div class="pay-method-check"></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn-full mt-16" id="pay-modal-btn" onclick="doPayOrder()">Confirm Payment</button>
+  </div>
+</div>
+
+<!-- ══════════════ CONTACT INFO MODAL ══════════════ -->
+<div class="modal-overlay" id="contact-modal">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeContactModal()">✕</button>
+    <div class="modal-title" id="cmodal-name">Contact</div>
+    <p class="modal-sub" id="cmodal-role"></p>
+    <div class="contact-item" style="padding:12px 0"><div class="contact-icon">📞</div><div><div style="font-size:12px;color:var(--text-ghost);margin-bottom:2px">Call</div><a id="cmodal-call" href="#" style="color:var(--sage);font-weight:500;text-decoration:none"></a></div></div>
+    <div class="contact-item" style="padding:12px 0"><div class="contact-icon">💬</div><div><div style="font-size:12px;color:var(--text-ghost);margin-bottom:2px">SMS</div><a id="cmodal-sms" href="#" style="color:var(--sage);font-weight:500;text-decoration:none"></a></div></div>
+    <div class="contact-item" style="padding:12px 0"><div class="contact-icon">✉️</div><div><div style="font-size:12px;color:var(--text-ghost);margin-bottom:2px">Email</div><a id="cmodal-email" href="#" style="color:var(--sage);font-weight:500;text-decoration:none"></a></div></div>
+    <button class="btn-full mt-16" onclick="openMsgFromContactModal()">Send Message in App</button>
+  </div>
+</div>
+
+<!-- ══════════════ FARMER LOCATION VIEW MODAL ══════════════ -->
+<div class="modal-overlay" id="location-view-modal">
+  <div class="modal-card" style="max-width:540px">
+    <button class="modal-close" onclick="document.getElementById('location-view-modal').classList.remove('open')">✕</button>
+    <div class="modal-title" id="lvm-title">Farm Location</div>
+    <p class="modal-sub" id="lvm-sub"></p>
+    <div id="location-view-map"></div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-mid);margin-top:10px">
+      <span>📍</span><span id="lvm-address"></span>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+  const SUPABASE_URL = "https://hctbgdpenhmscpubajpg.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_Dy5pMEAjMyXjJSCAKZ108Q_kZB3OF1W";
+  const DEMO_MODE = false;
+  let supabase = null;
+</script>
+
+// ════════════════════════════════════════════════
+// IN-MEMORY FALLBACK (Demo mode when no Supabase)
+// ════════════════════════════════════════════════
+let DB = {
+  users: [
+    { id:'admin-1', email:'admin@harvestgo.ph', password:'admin123', name:'Admin', role:'admin', phone:'', address:'', wallet:0, transactions:[] }
+  ],
+  products: [],
+  orders: [],
+  messages: []
+};
+
+// ════════════════════════════════════════════════
+// APP STATE
+// ════════════════════════════════════════════════
+let App = {
+  currentUser: null,
+  loginRole: 'consumer',
+  regRole: 'consumer',
+  cart: [],
+  selectedEmoji: '🍅',
+  selectedImgDataUrl: null,
+  activeThreadUserId: null,
+  pendingListing: null,
+  pendingPayOrderId: null,
+  currentFilterCat: 'all',
+  farmMarker: null,
+  farmMap: null,
+  farmLat: null,
+  farmLng: null,
+  farmAddress: '',
+  selectedPayMethod: 'GCash',
+  locationViewMap: null,
+};
+
+// ════════════════════════════════════════════════
+// SUPABASE DB LAYER
+// ════════════════════════════════════════════════
+async function dbGetUsers() {
+  if (DEMO_MODE) return DB.users;
+  const { data } = await supabase.from('users').select('*');
+  return data || [];
+}
+
+async function dbCreateUser(user) {
+  if (DEMO_MODE) { DB.users.push(user); return user; }
+  const { data, error } = await supabase.from('users').insert([user]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function dbUpdateUser(id, updates) {
+  if (DEMO_MODE) {
+    const u = DB.users.find(u => u.id === id);
+    if (u) Object.assign(u, updates);
+    return u;
+  }
+  const { data, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function dbGetProducts() {
+  if (DEMO_MODE) return DB.products;
+  const { data } = await supabase.from('products').select('*').order('listed_at', { ascending: false });
+  return data || [];
+}
+
+async function dbCreateProduct(prod) {
+  if (DEMO_MODE) { DB.products.unshift(prod); return prod; }
+  const { data, error } = await supabase.from('products').insert([prod]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function dbGetOrders(filter = {}) {
+  if (DEMO_MODE) {
+    let list = DB.orders;
+    if (filter.consumer_id) list = list.filter(o => o.consumer_id === filter.consumer_id);
+    if (filter.farmer_id) list = list.filter(o => o.farmer_id === filter.farmer_id);
+    return list;
+  }
+  let q = supabase.from('orders').select('*').order('created_at', { ascending: false });
+  if (filter.consumer_id) q = q.eq('consumer_id', filter.consumer_id);
+  if (filter.farmer_id) q = q.eq('farmer_id', filter.farmer_id);
+  const { data } = await q;
+  return data || [];
+}
+
+async function dbCreateOrder(order) {
+  if (DEMO_MODE) { DB.orders.push(order); return order; }
+  const { data, error } = await supabase.from('orders').insert([order]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function dbUpdateOrder(id, updates) {
+  if (DEMO_MODE) {
+    const o = DB.orders.find(o => o.id === id);
+    if (o) Object.assign(o, updates);
+    return o;
+  }
+  const { data, error } = await supabase.from('orders').update(updates).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function dbGetMessages(userId1, userId2) {
+  if (DEMO_MODE) {
+    return DB.messages.filter(m =>
+      (m.from_id === userId1 && m.to_id === userId2) ||
+      (m.from_id === userId2 && m.to_id === userId1)
+    ).sort((a,b) => a.created_at - b.created_at);
+  }
+  const { data } = await supabase.from('messages').select('*')
+    .or(`and(from_id.eq.${userId1},to_id.eq.${userId2}),and(from_id.eq.${userId2},to_id.eq.${userId1})`)
+    .order('created_at', { ascending: true });
+  return data || [];
+}
+
+async function dbGetAllMessages(userId) {
+  if (DEMO_MODE) {
+    return DB.messages.filter(m => m.from_id === userId || m.to_id === userId);
+  }
+  const { data } = await supabase.from('messages').select('*')
+    .or(`from_id.eq.${userId},to_id.eq.${userId}`)
+    .order('created_at', { ascending: false });
+  return data || [];
+}
+
+async function dbCreateMessage(msg) {
+  if (DEMO_MODE) { DB.messages.push(msg); return msg; }
+  const { data, error } = await supabase.from('messages').insert([msg]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function dbMarkMessagesRead(fromId, toId) {
+  if (DEMO_MODE) {
+    DB.messages.forEach(m => {
+      if (m.from_id === fromId && m.to_id === toId) m.read = true;
+    });
+    return;
+  }
+  await supabase.from('messages').update({ read: true })
+    .eq('from_id', fromId).eq('to_id', toId).eq('read', false);
+}
+
+// ════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════
+async function init() {
+  if (!DEMO_MODE) {
+    try {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch(e) {
+      console.warn('Supabase init failed, using demo mode');
+    }
+  }
+
+  // Show demo mode banner if not configured
+  if (DEMO_MODE) {
+    const banner = document.createElement('div');
+    banner.className = 'db-config-banner';
+    banner.innerHTML = `⚠️ <strong>Demo Mode</strong> — Data is not saved. Add your Supabase keys to enable persistent storage. See the setup guide.`;
+    document.body.appendChild(banner);
+  }
+
+  // Update landing stats
+  try {
+    const users = await dbGetUsers();
+    const farmers = users.filter(u => u.role === 'farmer').length;
+    const consumers = users.filter(u => u.role === 'consumer').length;
+    document.getElementById('stat-farmers').textContent = farmers || '0';
+    document.getElementById('stat-consumers').textContent = consumers || '0';
+  } catch(e) {}
+
+  // Hide loading
+  document.getElementById('db-loading').style.display = 'none';
+  document.getElementById('screen-landing').classList.add('active');
+}
+
+// ════════════════════════════════════════════════
+// SCREEN / PAGE NAVIGATION
+// ════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+function goToAuth(mode) {
+  showScreen('auth');
+  switchForm(mode);
+}
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.nav-btn[data-page="${id}"]`);
+  if (btn) btn.classList.add('active');
+  if (id === 'shop') renderProducts();
+  if (id === 'orders') renderOrders();
+  if (id === 'wallet') renderWallet();
+  if (id === 'messages') renderThreads();
+  if (id === 'admin') renderAdmin();
+  if (id === 'profile') renderProfile();
+  if (id === 'sell') { checkSellPage(); initFarmMap(); }
+}
+
+// ════════════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════════════
+function switchForm(type) {
+  document.getElementById('form-login').style.display = type === 'login' ? 'block' : 'none';
+  document.getElementById('form-register').style.display = type === 'register' ? 'block' : 'none';
+  clearAuthErrors();
+  clearAuthFields();
+}
+
+function clearAuthErrors() {
+  document.querySelectorAll('.err-text').forEach(e => e.classList.remove('show'));
+}
+
+function clearAuthFields() {
+  // Clear all auth inputs so previous user's info doesn't show
+  ['login-email','login-pass','reg-fname','reg-lname','reg-email','reg-phone','reg-pass','reg-pass2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+}
+
+function setLoginRole(role, el) {
+  App.loginRole = role;
+  el.closest('.role-tabs').querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function setRegRole(role, el) {
+  App.regRole = role;
+  el.closest('.role-tabs').querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+async function handleRegister() {
+  clearAuthErrors();
+  const fname = document.getElementById('reg-fname').value.trim();
+  const lname = document.getElementById('reg-lname').value.trim();
+  const email = document.getElementById('reg-email').value.trim().toLowerCase();
+  const phone = document.getElementById('reg-phone').value.trim();
+  const pass  = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+
+  if (!fname || !lname) { showToast('Please enter your full name'); return; }
+  if (!email || !email.includes('@') || !email.includes('.')) {
+    document.getElementById('err-reg-email').classList.add('show'); return;
+  }
+  if (pass.length < 8) { showToast('Password must be at least 8 characters'); return; }
+  if (pass !== pass2) { document.getElementById('err-reg-pass2').classList.add('show'); return; }
+
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true; btn.textContent = 'Creating account...';
+
+  try {
+    const users = await dbGetUsers();
+    if (users.find(u => u.email === email)) {
+      showToast('An account with this email already exists. Please sign in.');
+      btn.disabled = false; btn.textContent = 'Create Account';
+      return;
+    }
+    const newUser = {
+      id: 'user-' + Date.now(),
+      email, password: pass,
+      name: fname + ' ' + lname,
+      role: App.regRole,
+      phone, address: '',
+      wallet: 0,
+      transactions: []
+    };
+    const saved = await dbCreateUser(newUser);
+    await startSession(saved);
+  } catch(e) {
+    showToast('Registration failed. Please try again.');
+    console.error(e);
+  }
+  btn.disabled = false; btn.textContent = 'Create Account';
+}
+
+async function handleLogin() {
+  clearAuthErrors();
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('login-pass').value;
+
+  if (!email) { document.getElementById('err-login-email').classList.add('show'); return; }
+
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = 'Signing in...';
+
+  try {
+    const users = await dbGetUsers();
+
+    // Admin shorthand
+    if ((email === 'admin' || email === 'admin@harvestgo.ph') && pass === 'admin123') {
+      const admin = users.find(u => u.role === 'admin') || DB.users[0];
+      await startSession(admin);
+      btn.disabled = false; btn.textContent = 'Sign In';
+      return;
+    }
+
+    const user = users.find(u => u.email === email);
+    if (!user || user.password !== pass) {
+      document.getElementById('err-login-pass').classList.add('show');
+      btn.disabled = false; btn.textContent = 'Sign In';
+      return;
+    }
+    await startSession(user);
+  } catch(e) {
+    showToast('Login failed. Please try again.');
+    console.error(e);
+  }
+  btn.disabled = false; btn.textContent = 'Sign In';
+}
+
+async function startSession(user) {
+  App.currentUser = user;
+  buildNav();
+  document.getElementById('avatar-btn').textContent = user.name.charAt(0).toUpperCase();
+  document.getElementById('wallet-display').style.display = (user.role === 'farmer' || user.role === 'admin') ? 'flex' : 'none';
+  document.getElementById('cart-toggle-btn').style.display = user.role === 'consumer' ? 'flex' : 'none';
+  updateWalletDisplay();
+  showScreen('app');
+  showPage('shop');
+  showToast('Welcome, ' + user.name.split(' ')[0] + '! 👋');
+}
+
+function logout() {
+  App.currentUser = null;
+  App.cart = [];
+  App.activeThreadUserId = null;
+  App.farmMarker = null;
+  App.farmMap = null;
+  App.farmLat = null;
+  App.farmLng = null;
+  clearAuthFields();
+  // Reset role tabs to consumer
+  document.querySelectorAll('#form-login .role-tab').forEach((t,i) => t.classList.toggle('active', i===0));
+  document.querySelectorAll('#form-register .role-tab').forEach((t,i) => t.classList.toggle('active', i===0));
+  App.loginRole = 'consumer'; App.regRole = 'consumer';
+  showScreen('landing');
+}
+
+// ════════════════════════════════════════════════
+// NAV
+// ════════════════════════════════════════════════
+function buildNav() {
+  const navMap = {
+    consumer: [
+      { id:'shop', label:'Shop' },
+      { id:'orders', label:'My Orders' },
+      { id:'messages', label:'Messages' },
+      { id:'contact', label:'Contact' },
+    ],
+    farmer: [
+      { id:'shop', label:'Marketplace' },
+      { id:'sell', label:'Sell' },
+      { id:'orders', label:'Orders' },
+      { id:'wallet', label:'Wallet' },
+      { id:'messages', label:'Messages' },
+      { id:'contact', label:'Contact' },
+    ],
+    admin: [
+      { id:'shop', label:'Shop' },
+      { id:'admin', label:'Admin' },
+      { id:'orders', label:'All Orders' },
+      { id:'contact', label:'Contact' },
+    ],
+  };
+  const nav = document.getElementById('main-nav');
+  nav.innerHTML = (navMap[App.currentUser.role] || navMap.consumer).map(n =>
+    `<button class="nav-btn" data-page="${n.id}" onclick="showPage('${n.id}')">${n.label}</button>`
+  ).join('');
+}
+
+// ════════════════════════════════════════════════
+// PASSWORD TOOLS
+// ════════════════════════════════════════════════
+function togglePass(id, btn) {
+  const input = document.getElementById(id);
+  const isPass = input.type === 'password';
+  input.type = isPass ? 'text' : 'password';
+  document.getElementById('eye-' + id + '-off').style.display = isPass ? 'none' : 'block';
+  document.getElementById('eye-' + id + '-on').style.display = isPass ? 'block' : 'none';
+}
+
+// ════════════════════════════════════════════════
+// FARM MAP (Leaflet.js — Philippines)
+// ════════════════════════════════════════════════
+function initFarmMap() {
+  if (App.farmMap) {
+    setTimeout(() => App.farmMap.invalidateSize(), 100);
+    return;
+  }
+
+  // Center of Philippines
+  const PH_CENTER = [12.8797, 121.7740];
+  const map = L.map('farm-map', { center: PH_CENTER, zoom: 6 });
+  App.farmMap = map;
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  // Philippines boundary (rough bounds to restrict panning)
+  const PH_BOUNDS = L.latLngBounds([4.5, 116.0], [21.5, 127.0]);
+
+  map.on('click', function(e) {
+    const { lat, lng } = e.latlng;
+    // Check if within Philippines bounds
+    if (!PH_BOUNDS.contains(e.latlng)) {
+      showToast('Please select a location within the Philippines 🇵🇭');
+      return;
+    }
+    placeMarker(lat, lng);
+  });
+
+  // If farmer already has a saved location, show it
+  if (App.currentUser && App.currentUser.farm_lat && App.currentUser.farm_lng) {
+    placeMarker(App.currentUser.farm_lat, App.currentUser.farm_lng, App.currentUser.farm_address);
+    map.setView([App.currentUser.farm_lat, App.currentUser.farm_lng], 12);
+  }
+
+  setTimeout(() => map.invalidateSize(), 200);
+}
+
+function placeMarker(lat, lng, address) {
+  const map = App.farmMap;
+  if (App.farmMarker) map.removeLayer(App.farmMarker);
+
+  const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+  App.farmMarker = marker;
+  App.farmLat = lat;
+  App.farmLng = lng;
+
+  marker.on('dragend', function(e) {
+    const pos = marker.getLatLng();
+    App.farmLat = pos.lat;
+    App.farmLng = pos.lng;
+    reverseGeocode(pos.lat, pos.lng);
+  });
+
+  if (address) {
+    App.farmAddress = address;
+    showLocationDisplay(lat, lng, address);
+  } else {
+    reverseGeocode(lat, lng);
+  }
+
+  document.getElementById('err-farm-location').classList.remove('show');
+}
+
+function reverseGeocode(lat, lng) {
+  // Use Nominatim (free, no key needed)
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
+    .then(r => r.json())
+    .then(data => {
+      const address = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      App.farmAddress = address;
+      showLocationDisplay(lat, lng, address);
+    })
+    .catch(() => {
+      const address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      App.farmAddress = address;
+      showLocationDisplay(lat, lng, address);
+    });
+}
+
+function showLocationDisplay(lat, lng, address) {
+  const disp = document.getElementById('farm-location-display');
+  document.getElementById('farm-lat-lng').textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  document.getElementById('farm-address-display').textContent = address.split(',').slice(0,3).join(',');
+  disp.style.display = 'flex';
+}
+
+// ════════════════════════════════════════════════
+// PRODUCTS — RENDER
+// ════════════════════════════════════════════════
+async function renderProducts() {
+  const grid = document.getElementById('products-grid');
+  grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="spin" style="width:32px;height:32px;border-color:var(--border);border-top-color:var(--sage);margin:0 auto 12px"></div><p>Loading...</p></div>`;
+
+  const search = (document.getElementById('search-input')?.value || '').toLowerCase();
+  let list = await dbGetProducts();
+  list = list.filter(p => p.stock > 0);
+  if (App.currentFilterCat !== 'all') list = list.filter(p => p.category === App.currentFilterCat);
+  if (search) list = list.filter(p => p.name.toLowerCase().includes(search) || p.farmer_name?.toLowerCase().includes(search));
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🌾</div><p>No products found yet. Check back soon!</p></div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(p => {
+    const imgContent = p.img_url
+      ? `<img src="${p.img_url}" alt="${p.name}">`
+      : `<span class="emoji-fallback">${p.emoji || '🌿'}</span>`;
+    const isMyProduct = App.currentUser && p.farmer_id === App.currentUser.id;
+    const addBtn = App.currentUser?.role === 'consumer'
+      ? `<button class="add-btn" onclick="addToCart('${p.id}')">+</button>`
+      : (isMyProduct ? `<span style="font-size:11px;color:var(--text-ghost)">Your listing</span>` : '');
+    return `
+      <div class="product-card">
+        <div class="product-img">
+          ${imgContent}
+          <span class="product-badge ${p.organic ? 'organic' : ''}">${p.organic ? 'Organic' : 'Fresh'}</span>
+        </div>
+        <div class="product-info">
+          <div class="product-name">${p.name}</div>
+          <div class="product-farmer">by <a onclick="showFarmerContact('${p.id}')">${p.farmer_name}</a>
+            ${p.farm_lat ? `<span onclick="showFarmLocation('${p.id}')" style="cursor:pointer;color:var(--gold);margin-left:4px" title="View farm location">📍</span>` : ''}
+          </div>
+          <div class="product-footer">
+            <div class="product-price">₱${p.price}<small>/${p.unit}</small></div>
+            ${addBtn}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+let _cachedProducts = [];
+async function getProductsCache() {
+  _cachedProducts = await dbGetProducts();
+  return _cachedProducts;
+}
+
+async function showFarmLocation(prodId) {
+  const products = await getProductsCache();
+  const p = products.find(x => x.id === prodId);
+  if (!p || !p.farm_lat) return;
+
+  document.getElementById('lvm-title').textContent = p.farmer_name + "'s Farm";
+  document.getElementById('lvm-sub').textContent = p.name;
+  document.getElementById('lvm-address').textContent = p.farm_address ? p.farm_address.split(',').slice(0,3).join(',') : '';
+  document.getElementById('location-view-modal').classList.add('open');
+
+  setTimeout(() => {
+    if (App.locationViewMap) {
+      App.locationViewMap.remove();
+      App.locationViewMap = null;
+    }
+    const map = L.map('location-view-map', { center: [p.farm_lat, p.farm_lng], zoom: 13 });
+    App.locationViewMap = map;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+    L.marker([p.farm_lat, p.farm_lng]).addTo(map)
+      .bindPopup(`<strong>${p.farmer_name}'s Farm</strong><br>${p.name}`).openPopup();
+    setTimeout(() => map.invalidateSize(), 100);
+  }, 200);
+}
+
+function filterCat(cat, el) {
+  App.currentFilterCat = cat;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderProducts();
+}
+
+function filterProducts() { renderProducts(); }
+
+// ════════════════════════════════════════════════
+// CART
+// ════════════════════════════════════════════════
+async function addToCart(id) {
+  const products = await getProductsCache();
+  const prod = products.find(p => p.id === id);
+  if (!prod) return;
+  if (prod.farmer_id === App.currentUser.id) { showToast("You can't buy your own product"); return; }
+
+  const ex = App.cart.find(c => c.id === id);
+  if (ex) {
+    if (ex.qty >= prod.stock) { showToast('Not enough stock'); return; }
+    ex.qty++;
+  } else {
+    App.cart.push({ ...prod, qty: 1 });
+  }
+  updateCartCount();
+  showToast(prod.name + ' added to basket 🛒');
+}
+
+function updateCartCount() {
+  const count = App.cart.reduce((a,c) => a + c.qty, 0);
+  document.getElementById('cart-count').textContent = count;
+}
+
+function toggleCart() {
+  document.getElementById('cart-drawer').classList.toggle('open');
+  document.getElementById('drawer-overlay').classList.toggle('open');
+  renderCart();
+}
+
+function renderCart() {
+  const list = document.getElementById('cart-items-list');
+  const footer = document.getElementById('cart-footer');
+
+  if (!App.cart.length) {
+    list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-ghost);font-size:14px">🌿 Your basket is empty</div>';
+    footer.innerHTML = '';
+    return;
+  }
+
+  list.innerHTML = App.cart.map(item => {
+    const imgHtml = item.img_url ? `<img src="${item.img_url}" alt="${item.name}">` : (item.emoji || '🌿');
+    return `
+      <div class="cart-item">
+        <div class="cart-item-img">${imgHtml}</div>
+        <div class="cart-item-info">
+          <div class="cart-item-name">${item.name}</div>
+          <div class="cart-item-price">₱${item.price} / ${item.unit}</div>
+        </div>
+        <div class="qty-control">
+          <button class="qty-btn" onclick="changeQty('${item.id}',-1)">−</button>
+          <span class="qty-num">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty('${item.id}',1)">+</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const subtotal = App.cart.reduce((a,c) => a + c.price * c.qty, 0);
+  const user = App.currentUser;
+  const hasAddress = user && user.address && user.address.trim().length > 3;
+
+  // Shopee-style footer
+  footer.innerHTML = `
+    <div class="checkout-section">
+      <span class="checkout-section-label">Delivery Address</span>
+      ${hasAddress
+        ? `<div class="address-display">
+            <span class="addr-icon">📍</span>
+            <div class="addr-info">
+              <div class="addr-name">${user.name}</div>
+              <div>${user.address}</div>
+              ${user.phone ? `<div style="font-size:12px;color:var(--text-ghost)">${user.phone}</div>` : ''}
+              <span class="address-change-btn" onclick="toggleCart();showPage('profile')">Change address</span>
+            </div>
+          </div>`
+        : `<div class="address-missing">
+            ⚠️ No delivery address set. <span onclick="toggleCart();showPage('profile')" style="cursor:pointer;text-decoration:underline;font-weight:600;margin-left:4px">Add address →</span>
+          </div>`
+      }
+    </div>
+
+    <div class="checkout-section">
+      <span class="checkout-section-label">Payment Method</span>
+      <div class="pay-method-grid">
+        <div class="pay-method-card ${App.selectedPayMethod==='GCash'?'selected':''}" onclick="selectCartPay(this,'GCash')">
+          <div class="pay-method-icon">💚</div>
+          <div class="pay-method-info"><div class="pay-method-name">GCash</div><div class="pay-method-desc">Digital payment</div></div>
+          <div class="pay-method-check"></div>
+        </div>
+        <div class="pay-method-card ${App.selectedPayMethod==='Maya'?'selected':''}" onclick="selectCartPay(this,'Maya')">
+          <div class="pay-method-icon">💜</div>
+          <div class="pay-method-info"><div class="pay-method-name">Maya</div><div class="pay-method-desc">Digital payment</div></div>
+          <div class="pay-method-check"></div>
+        </div>
+        <div class="pay-method-card ${App.selectedPayMethod==='Online Banking'?'selected':''}" onclick="selectCartPay(this,'Online Banking')">
+          <div class="pay-method-icon">🏦</div>
+          <div class="pay-method-info"><div class="pay-method-name">Online Banking</div><div class="pay-method-desc">BDO, BPI, UnionBank</div></div>
+          <div class="pay-method-check"></div>
+        </div>
+        <div class="pay-method-card ${App.selectedPayMethod==='COD'?'selected':''}" onclick="selectCartPay(this,'COD')">
+          <div class="pay-method-icon">💵</div>
+          <div class="pay-method-info"><div class="pay-method-name">Cash on Delivery</div><div class="pay-method-desc">Pay when you receive</div></div>
+          <div class="pay-method-check"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cart-total-row"><span>Subtotal</span><span>₱${subtotal.toFixed(2)}</span></div>
+    <div class="cart-total-row"><span>Delivery Fee</span><span style="color:var(--sage)">Arranged with Farmer</span></div>
+    <div class="cart-total-row grand"><span>Total</span><span>₱${subtotal.toFixed(2)}</span></div>
+    <button class="btn-full" onclick="checkout()" ${!hasAddress ? 'disabled title="Add delivery address first"' : ''} style="${!hasAddress ? 'opacity:0.5;cursor:not-allowed' : ''}">
+      ${!hasAddress ? '⚠️ Add Address First' : 'Place Order →'}
+    </button>
+  `;
+}
+
+function selectCartPay(el, method) {
+  App.selectedPayMethod = method;
+  renderCart();
+}
+
+function changeQty(id, delta) {
+  const item = App.cart.find(c => c.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) App.cart = App.cart.filter(c => c.id !== id);
+  updateCartCount();
+  renderCart();
+}
+
+async function checkout() {
+  if (!App.cart.length) { showToast('Your basket is empty'); return; }
+  const user = App.currentUser;
+  if (!user.address || user.address.trim().length < 4) {
+    showToast('Please set a delivery address in your profile first');
+    toggleCart();
+    showPage('profile');
+    return;
+  }
+
+  const payMethod = App.selectedPayMethod;
+
+  // Group by farmer
+  const grouped = {};
+  App.cart.forEach(item => {
+    if (!grouped[item.farmer_id]) grouped[item.farmer_id] = [];
+    grouped[item.farmer_id].push(item);
+  });
+
+  for (const [farmerId, items] of Object.entries(grouped)) {
+    const orderTotal = items.reduce((a,c) => a + c.price * c.qty, 0);
+    const order = {
+      id: 'ORD-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+      consumer_id: user.id,
+      consumer_name: user.name,
+      consumer_address: user.address,
+      farmer_id: farmerId,
+      farmer_name: items[0].farmer_name,
+      items: JSON.stringify(items.map(i => ({ id:i.id, name:i.name, qty:i.qty, price:i.price, unit:i.unit, emoji:i.emoji, img_url:i.img_url||null }))),
+      total: orderTotal,
+      commission: orderTotal * 0.1,
+      pay_method: payMethod,
+      status: 'pending',
+      date: new Date().toISOString().split('T')[0],
+      created_at: Date.now(),
+    };
+    await dbCreateOrder(order);
+    await sendSystemMsg(user.id, farmerId,
+      `Hi! I just placed an order (${order.id}) for: ${items.map(i => i.name + ' x' + i.qty).join(', ')}. Total: ₱${orderTotal.toFixed(2)}. Delivery to: ${user.address}`
+    );
+  }
+
+  App.cart = [];
+  updateCartCount();
+  toggleCart();
+  showToast('Order placed! The farmer will confirm soon. ✅');
+  setTimeout(() => showPage('orders'), 800);
+}
+
+// ════════════════════════════════════════════════
+// ORDERS
+// ════════════════════════════════════════════════
+const ORDER_STEPS = ['Order Placed','Farmer Confirmed','Payment Received','Completed'];
+const ORDER_ICONS = ['📋','✅','💳','🎉'];
+const STATUS_TO_STEP = { pending:0, confirmed:1, paid:2, completed:3 };
+
+async function renderOrders() {
+  const user = App.currentUser;
+  if (!user) return;
+
+  const header = document.getElementById('orders-header');
+  const list   = document.getElementById('orders-list');
+  list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-ghost)">Loading orders...</div>';
+
+  let filter = {};
+  if (user.role === 'consumer') { header.innerHTML = '<h2>My Orders</h2><span>Track your purchases</span>'; filter.consumer_id = user.id; }
+  else if (user.role === 'farmer') { header.innerHTML = '<h2>Incoming Orders</h2><span>Confirm and manage your sales</span>'; filter.farmer_id = user.id; }
+  else { header.innerHTML = '<h2>All Orders</h2><span>Platform overview</span>'; }
+
+  let myOrders = await dbGetOrders(filter);
+  myOrders = myOrders.sort((a,b) => b.created_at - a.created_at);
+
+  if (!myOrders.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><p>${user.role === 'consumer' ? "You haven't placed any orders yet." : "No orders yet."}</p></div>`;
+    return;
+  }
+
+  list.innerHTML = myOrders.map(order => {
+    const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+    const step = STATUS_TO_STEP[order.status] ?? 0;
+    const stepsHtml = ORDER_STEPS.map((s,i) => `
+      <div class="track-step">
+        <div class="track-dot ${i < step ? 'done' : i === step ? 'active' : ''}">${ORDER_ICONS[i]}</div>
+        <div class="track-label ${i === step ? 'active' : ''}">${s}</div>
+      </div>
+      ${i < ORDER_STEPS.length-1 ? `<div class="track-line ${i < step ? 'done' : ''}"></div>` : ''}
+    `).join('');
+
+    const itemsSummary = items.map(i => `${i.name} ×${i.qty}`).join(', ');
+
+    let actions = '';
+    if (user.role === 'farmer') {
+      if (order.status === 'pending') actions += `<button class="btn-sm btn-confirm" onclick="farmerConfirmOrder('${order.id}')">✓ Confirm Order</button>`;
+      if (order.status === 'paid') actions += `<button class="btn-sm btn-confirm" onclick="farmerCompleteOrder('${order.id}')">✓ Mark Completed</button>`;
+      actions += `<button class="btn-sm btn-msg" onclick="msgUser('${order.consumer_id}','${order.consumer_name}')">💬 Message Buyer</button>`;
+    }
+    if (user.role === 'consumer') {
+      if (order.status === 'confirmed') actions += `<button class="btn-sm btn-pay" onclick="openPayModal('${order.id}')">💳 Pay Now</button>`;
+      actions += `<button class="btn-sm btn-msg" onclick="msgUser('${order.farmer_id}','${order.farmer_name}')">💬 Message Farmer</button>`;
+    }
+
+    const otherParty = user.role === 'farmer'
+      ? `Buyer: <strong>${order.consumer_name}</strong>`
+      : `Farmer: <strong>${order.farmer_name}</strong>`;
+
+    const addrLine = order.consumer_address ? `<div style="font-size:11px;color:var(--text-ghost);margin-top:2px">📍 ${order.consumer_address}</div>` : '';
+
+    return `
+      <div class="order-card">
+        <div class="order-header">
+          <div>
+            <div class="order-id">${order.id}</div>
+            <div class="order-date">${order.date} · ${otherParty} · ${order.pay_method}</div>
+            ${addrLine}
+          </div>
+          <span class="order-status status-${order.status}">${order.status}</span>
+        </div>
+        <div class="order-track">${stepsHtml}</div>
+        <div class="order-items">${itemsSummary}</div>
+        <div class="order-total">Total: ₱${Number(order.total).toFixed(2)}</div>
+        ${actions ? `<div class="order-actions">${actions}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function farmerConfirmOrder(orderId) {
+  await dbUpdateOrder(orderId, { status: 'confirmed' });
+  const orders = await dbGetOrders({ farmer_id: App.currentUser.id });
+  const order = orders.find(o => o.id === orderId);
+  if (order) await sendSystemMsg(App.currentUser.id, order.consumer_id, `Your order ${order.id} has been confirmed! Please proceed to payment. ✅`);
+  renderOrders();
+  showToast('Order confirmed! Buyer has been notified to pay.');
+}
+
+async function farmerCompleteOrder(orderId) {
+  await dbUpdateOrder(orderId, { status: 'completed' });
+  const orders = await dbGetOrders({ farmer_id: App.currentUser.id });
+  const order = orders.find(o => o.id === orderId);
+  if (order) {
+    const net = order.total - order.commission;
+    const newWallet = (App.currentUser.wallet || 0) + net;
+    const txns = [...(App.currentUser.transactions || []), { type:'credit', amount:net, desc:`Sale: ${order.id}`, date:new Date().toLocaleDateString('en-PH') }];
+    await dbUpdateUser(App.currentUser.id, { wallet: newWallet, transactions: txns });
+    App.currentUser.wallet = newWallet;
+    App.currentUser.transactions = txns;
+    updateWalletDisplay();
+    await sendSystemMsg(App.currentUser.id, order.consumer_id, `Your order ${order.id} is completed. Thank you for shopping with HarvestGo! 🎉`);
+  }
+  renderOrders();
+  showToast('Order completed! Payment credited to your wallet!');
+}
+
+// ════════════════════════════════════════════════
+// PAY ORDER (Consumer)
+// ════════════════════════════════════════════════
+async function openPayModal(orderId) {
+  const orders = await dbGetOrders({ consumer_id: App.currentUser.id });
+  const order = orders.find(o => o.id === orderId);
+  if (!order) return;
+  const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+  App.pendingPayOrderId = orderId;
+  document.getElementById('pay-modal-sub').textContent = `Order ${order.id} — Total: ₱${Number(order.total).toFixed(2)}`;
+  document.getElementById('pay-modal-content').innerHTML = `
+    <div style="background:var(--pale);border-radius:12px;padding:16px">
+      <div style="font-size:13px;color:var(--text-soft);margin-bottom:8px">Items:</div>
+      ${items.map(i => `<div style="font-size:14px;font-weight:500;color:var(--text-dark);margin-bottom:4px">${i.name} ×${i.qty} — ₱${(i.price*i.qty).toFixed(2)}</div>`).join('')}
+      <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--forest);margin-top:10px">Total: ₱${Number(order.total).toFixed(2)}</div>
+    </div>`;
+  document.querySelectorAll('#pay-modal-opts .pay-method-card').forEach((o,i) => {
+    o.classList.toggle('selected', i === 0);
+  });
+  App.selectedPayMethod = 'GCash';
+  document.getElementById('pay-modal').classList.add('open');
+}
+
+function closePayModal() {
+  document.getElementById('pay-modal').classList.remove('open');
+  App.pendingPayOrderId = null;
+}
+
+function selectPayModal(el, method) {
+  document.querySelectorAll('#pay-modal-opts .pay-method-card').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  App.selectedPayMethod = method;
+}
+
+async function doPayOrder() {
+  const orderId = App.pendingPayOrderId;
+  if (!orderId) return;
+  await dbUpdateOrder(orderId, { status: 'paid', pay_method: App.selectedPayMethod });
+  const orders = await dbGetOrders({ consumer_id: App.currentUser.id });
+  const order = orders.find(o => o.id === orderId);
+  if (order) {
+    const txns = [...(App.currentUser.transactions || []), { type:'debit', amount:order.total, desc:`Purchase: ${order.id}`, date:new Date().toLocaleDateString('en-PH') }];
+    await dbUpdateUser(App.currentUser.id, { transactions: txns });
+    App.currentUser.transactions = txns;
+    await sendSystemMsg(App.currentUser.id, order.farmer_id,
+      `Payment received for order ${order.id} via ${App.selectedPayMethod}. Please prepare the items! 💳`);
+  }
+  closePayModal();
+  renderOrders();
+  showToast('Payment confirmed! The farmer will prepare your order.');
+}
+
+// ════════════════════════════════════════════════
+// SELL (Farmer)
+// ════════════════════════════════════════════════
+function checkSellPage() {
+  const notice = document.getElementById('wallet-low-notice');
+  notice.style.display = (App.currentUser && App.currentUser.wallet < 50) ? 'block' : 'none';
+}
+
+function triggerImgUpload() { document.getElementById('product-img-input').click(); }
+
+function handleImgUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showToast('Image too large — max 5MB'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    App.selectedImgDataUrl = e.target.result;
+    document.getElementById('img-placeholder').style.display = 'none';
+    const preview = document.getElementById('img-preview');
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+    document.getElementById('img-remove-btn').style.display = 'flex';
+    document.getElementById('img-upload-area').classList.add('has-img');
+    updatePreview();
+    showToast('Photo uploaded ✓');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImg(event) {
+  if (event && event.stopPropagation) event.stopPropagation();
+  App.selectedImgDataUrl = null;
+  document.getElementById('img-placeholder').style.display = 'block';
+  const preview = document.getElementById('img-preview');
+  preview.src = ''; preview.style.display = 'none';
+  document.getElementById('img-remove-btn').style.display = 'none';
+  document.getElementById('img-upload-area').classList.remove('has-img');
+  document.getElementById('product-img-input').value = '';
+  updatePreview();
+}
+
+function selectEmoji(el, emoji) {
+  document.querySelectorAll('.emoji-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  App.selectedEmoji = emoji;
+  updatePreview();
+}
+
+function updatePreview() {
+  const name  = document.getElementById('sell-name').value.trim();
+  const price = parseFloat(document.getElementById('sell-price').value) || 0;
+  const stock = parseInt(document.getElementById('sell-stock').value) || 0;
+  const unit  = document.getElementById('sell-unit').value;
+  const previewCard = document.getElementById('listing-preview');
+  if (!name && !price) { previewCard.style.display = 'none'; return; }
+  previewCard.style.display = 'block';
+  document.getElementById('preview-name').textContent = name || 'Product Name';
+  document.getElementById('preview-price').textContent = '₱' + price.toFixed(2) + ' /' + unit;
+  document.getElementById('preview-stock').textContent = stock + ' ' + unit + ' available';
+  const imgBox = document.getElementById('preview-img-box');
+  imgBox.innerHTML = App.selectedImgDataUrl ? `<img src="${App.selectedImgDataUrl}" alt="preview">` : App.selectedEmoji;
+}
+
+function confirmListProduct() {
+  const name    = document.getElementById('sell-name').value.trim();
+  const price   = parseFloat(document.getElementById('sell-price').value);
+  const stock   = parseInt(document.getElementById('sell-stock').value);
+  const unit    = document.getElementById('sell-unit').value;
+  const cat     = document.getElementById('sell-cat').value;
+  const desc    = document.getElementById('sell-desc').value.trim();
+  const organic = document.getElementById('sell-organic').value === 'yes';
+
+  if (!name)        { showToast('Please enter a product name'); return; }
+  if (!price || price <= 0) { showToast('Please enter a valid price'); return; }
+  if (!stock || stock <= 0) { showToast('Please enter available stock'); return; }
+
+  // REQUIRE FARM LOCATION
+  if (!App.farmLat || !App.farmLng) {
+    document.getElementById('err-farm-location').classList.add('show');
+    document.getElementById('farm-map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showToast('Please drop a pin on your farm location 📍');
+    return;
+  }
+
+  if (App.currentUser.wallet < 50) {
+    showToast('Insufficient balance. Top up at least ₱50 to list a product.');
+    showPage('wallet');
+    return;
+  }
+
+  App.pendingListing = { name, price, stock, unit, cat, desc, organic, emoji: App.selectedEmoji, imgUrl: App.selectedImgDataUrl };
+
+  const imgHtml = App.selectedImgDataUrl
+    ? `<img src="${App.selectedImgDataUrl}" style="width:80px;height:80px;border-radius:10px;object-fit:cover;margin-right:16px">`
+    : `<div style="width:80px;height:80px;border-radius:10px;background:var(--pale);display:flex;align-items:center;justify-content:center;font-size:36px;margin-right:16px">${App.selectedEmoji}</div>`;
+
+  document.getElementById('listing-confirm-content').innerHTML = `
+    <div style="display:flex;align-items:center;background:var(--pale);border-radius:12px;padding:16px;margin-bottom:14px">
+      ${imgHtml}
+      <div>
+        <div style="font-weight:700;font-size:16px;color:var(--text-dark)">${name}</div>
+        <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--forest);margin:4px 0">₱${price.toFixed(2)} <small style="font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text-ghost)">/${unit}</small></div>
+        <div style="font-size:12px;color:var(--text-ghost)">${stock} ${unit} · ${cat} · ${organic ? '🌿 Organic' : 'Conventional'}</div>
+        <div style="font-size:12px;color:var(--text-mid);margin-top:4px">📍 ${App.farmAddress.split(',').slice(0,2).join(',')}</div>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--text-mid)">Wallet balance: <strong style="color:var(--forest)">₱${App.currentUser.wallet.toFixed(2)}</strong></div>
+    <div style="font-size:13px;color:var(--text-mid);margin-top:4px">After listing fee: <strong style="color:var(--forest)">₱${(App.currentUser.wallet - 50).toFixed(2)}</strong></div>`;
+  document.getElementById('listing-modal').classList.add('open');
+}
+
+function closeListingModal() { document.getElementById('listing-modal').classList.remove('open'); }
+
+async function doListProduct() {
+  if (!App.pendingListing) return;
+  const { name, price, stock, unit, cat, desc, organic, emoji, imgUrl } = App.pendingListing;
+
+  // Deduct listing fee
+  const newWallet = App.currentUser.wallet - 50;
+  const txns = [...(App.currentUser.transactions || []), { type:'debit', amount:50, desc:`Listing fee: ${name}`, date:new Date().toLocaleDateString('en-PH') }];
+  await dbUpdateUser(App.currentUser.id, { wallet: newWallet, transactions: txns });
+  App.currentUser.wallet = newWallet;
+  App.currentUser.transactions = txns;
+  updateWalletDisplay();
+
+  const prod = {
+    id: 'prod-' + Date.now(),
+    name, emoji, img_url: imgUrl || null, price, unit,
+    farmer_name: App.currentUser.name,
+    farmer_id: App.currentUser.id,
+    farmer_phone: App.currentUser.phone || '',
+    farmer_email: App.currentUser.email || '',
+    category: cat, organic, stock, description: desc,
+    farm_lat: App.farmLat,
+    farm_lng: App.farmLng,
+    farm_address: App.farmAddress,
+    listed_at: Date.now(),
+  };
+  await dbCreateProduct(prod);
+
+  // Reset sell form
+  document.getElementById('sell-name').value = '';
+  document.getElementById('sell-price').value = '';
+  document.getElementById('sell-stock').value = '';
+  document.getElementById('sell-desc').value = '';
+  document.getElementById('listing-preview').style.display = 'none';
+  removeImg({});
+  App.pendingListing = null;
+  // Reset map
+  if (App.farmMarker && App.farmMap) App.farmMap.removeLayer(App.farmMarker);
+  App.farmMarker = null; App.farmLat = null; App.farmLng = null; App.farmAddress = '';
+  document.getElementById('farm-location-display').style.display = 'none';
+
+  closeListingModal();
+  showToast('✓ ' + name + ' is now live on the marketplace!');
+  setTimeout(() => showPage('shop'), 600);
+}
+
+// ════════════════════════════════════════════════
+// WALLET
+// ════════════════════════════════════════════════
+function updateWalletDisplay() {
+  if (!App.currentUser) return;
+  const bal = (App.currentUser.wallet || 0).toFixed(2);
+  document.getElementById('wallet-amount').textContent = bal;
+  const wb = document.getElementById('wallet-big');
+  if (wb) wb.textContent = bal;
+}
+
+function renderWallet() {
+  updateWalletDisplay();
+  const txns = App.currentUser.transactions || [];
+  const hist = document.getElementById('txn-history');
+  if (!txns.length) {
+    hist.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-ghost);font-size:14px">No transactions yet</div>';
+    return;
+  }
+  hist.innerHTML = [...txns].reverse().map(t => `
+    <div class="txn-row">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text-dark)">${t.desc}</div>
+        <div style="font-size:12px;color:var(--text-ghost);margin-top:2px">${t.date}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="txn-type ${t.type === 'credit' ? 'txn-credit' : 'txn-debit'}">${t.type === 'credit' ? 'Credit' : 'Debit'}</span>
+        <span style="font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:${t.type==='credit'?'var(--leaf)':'#c53030'}">${t.type==='credit'?'+':'-'}₱${t.amount.toFixed(2)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function openTopup() {
+  setTopupStep(1);
+  document.getElementById('gcash-num').value = '';
+  document.getElementById('topup-amount').value = '';
+  document.getElementById('err-topup').classList.remove('show');
+  document.getElementById('topup-modal').classList.add('open');
+}
+
+function closeTopup() { document.getElementById('topup-modal').classList.remove('open'); }
+
+function setTopupStep(step) {
+  [1,2,3].forEach(i => {
+    document.getElementById('topup-panel-' + i).classList.toggle('active', i === step);
+    const el = document.getElementById('tstep-' + i);
+    el.classList.remove('active','done');
+    if (i === step) el.classList.add('active');
+    else if (i < step) el.classList.add('done');
+  });
+}
+
+function topupStep2() {
+  const num = document.getElementById('gcash-num').value.trim();
+  const amt = parseFloat(document.getElementById('topup-amount').value);
+  if (!num || num.replace(/\s/g,'').length < 10) { showToast('Please enter a valid GCash number'); return; }
+  if (!amt || amt < 100) { document.getElementById('err-topup').classList.add('show'); return; }
+  document.getElementById('err-topup').classList.remove('show');
+  const ref = 'HG-' + Date.now().toString().slice(-8);
+  document.getElementById('qr-amount-display').textContent = '₱' + amt.toFixed(2);
+  document.getElementById('qr-ref').textContent = 'Ref: ' + ref;
+  document.getElementById('qr-gcash-display').textContent = num;
+  setTopupStep(2);
+}
+
+function topupBack() { setTopupStep(1); }
+
+async function topupStep3() {
+  const amt = parseFloat(document.getElementById('topup-amount').value);
+  if (!amt || amt < 100) { showToast('Invalid amount'); return; }
+  const newWallet = (App.currentUser.wallet || 0) + amt;
+  const dateStr = new Date().toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' });
+  const txns = [...(App.currentUser.transactions || []), { type:'credit', amount:amt, desc:`GCash Top-Up`, date:dateStr }];
+  await dbUpdateUser(App.currentUser.id, { wallet: newWallet, transactions: txns });
+  App.currentUser.wallet = newWallet;
+  App.currentUser.transactions = txns;
+  document.getElementById('confirm-amount-display').textContent = '₱' + amt.toFixed(2);
+  document.getElementById('last-topup-label').textContent = 'Last topped up: ' + dateStr;
+  updateWalletDisplay();
+  setTopupStep(3);
+}
+
+// ════════════════════════════════════════════════
+// MESSAGES
+// ════════════════════════════════════════════════
+async function sendSystemMsg(fromId, toId, text) {
+  const msg = {
+    id: 'msg-' + Date.now() + '-' + Math.random(),
+    from_id: fromId,
+    to_id: toId,
+    text,
+    time: new Date().toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' }),
+    created_at: Date.now(),
+    read: false,
+  };
+  await dbCreateMessage(msg);
+  if (App.currentUser && App.activeThreadUserId) {
+    if (App.activeThreadUserId === fromId || App.activeThreadUserId === toId) {
+      renderChatWith(App.activeThreadUserId);
+    }
+  }
+  updateMsgNotif();
+}
+
+function msgUser(userId, userName) {
+  showPage('messages');
+  setTimeout(() => {
+    App.activeThreadUserId = userId;
+    renderThreads();
+    openChatWith(userId, userName);
+  }, 100);
+}
+
+async function renderThreads() {
+  const tl = document.getElementById('thread-list');
+  const myId = App.currentUser.id;
+  const allMsgs = await dbGetAllMessages(myId);
+
+  const partners = new Set();
+  allMsgs.forEach(m => {
+    if (m.from_id === myId) partners.add(m.to_id);
+    if (m.to_id === myId) partners.add(m.from_id);
+  });
+
+  if (!partners.size) {
+    tl.innerHTML = '<div class="msg-no-threads">No conversations yet.<br>Messages from orders will appear here.</div>';
+    return;
+  }
+
+  const users = await dbGetUsers();
+  const threads = [...partners].map(uid => {
+    const user = users.find(u => u.id === uid);
+    const msgs = allMsgs.filter(m => (m.from_id===myId&&m.to_id===uid)||(m.from_id===uid&&m.to_id===myId))
+                         .sort((a,b) => a.created_at - b.created_at);
+    const last = msgs[msgs.length-1];
+    const unread = msgs.filter(m => m.to_id === myId && !m.read).length;
+    return { uid, name: user ? user.name : 'Unknown', role: user ? user.role : '', last, unread };
+  }).sort((a,b) => (b.last?.created_at||0) - (a.last?.created_at||0));
+
+  tl.innerHTML = threads.map(t => `
+    <div class="msg-thread ${App.activeThreadUserId === t.uid ? 'active' : ''}" onclick="openChatWith('${t.uid}','${t.name}')">
+      <div class="msg-avatar">${t.name.charAt(0).toUpperCase()}</div>
+      <div class="msg-thread-info">
+        <div class="msg-thread-name">${t.name}</div>
+        <div class="msg-thread-preview">${t.last ? t.last.text.slice(0,50) : ''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <div class="msg-thread-time">${t.last ? t.last.time : ''}</div>
+        ${t.unread > 0 ? `<div class="msg-unread"></div>` : ''}
+      </div>
+    </div>`).join('');
+  updateMsgNotif();
+}
+
+async function updateMsgNotif() {
+  if (!App.currentUser) return;
+  const myId = App.currentUser.id;
+  const allMsgs = await dbGetAllMessages(myId);
+  const unread = allMsgs.filter(m => m.to_id === myId && !m.read).length;
+  const btn = document.querySelector('.nav-btn[data-page="messages"]');
+  if (!btn) return;
+  const old = btn.querySelector('.nav-notif');
+  if (old) old.remove();
+  if (unread > 0) btn.insertAdjacentHTML('beforeend', '<span class="nav-notif"></span>');
+}
+
+async function openChatWith(uid, nameHint) {
+  App.activeThreadUserId = uid;
+  const users = await dbGetUsers();
+  const user = users.find(u => u.id === uid);
+  const name = user ? user.name : (nameHint || 'User');
+  const role = user ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
+
+  document.getElementById('msg-contact-name').textContent = name;
+  document.getElementById('msg-contact-role').textContent = role;
+  document.getElementById('msg-contact-info-btn').style.display = 'flex';
+
+  await dbMarkMessagesRead(uid, App.currentUser.id);
+  renderChatWith(uid);
+  renderThreads();
+  updateMsgNotif();
+}
+
+async function renderChatWith(uid) {
+  const myId = App.currentUser.id;
+  const msgs = await dbGetMessages(myId, uid);
+  const body = document.getElementById('msg-body');
+  if (!msgs.length) {
+    body.innerHTML = '<div class="msg-empty"><div class="msg-empty-inner"><div class="big-icon">👋</div><p>Say hello to start the conversation</p></div></div>';
+    return;
+  }
+  body.innerHTML = msgs.map(m => `
+    <div class="bubble ${m.from_id === myId ? 'me' : 'them'}">
+      <div class="bubble-text">${m.text.replace(/</g,'&lt;')}</div>
+      <div class="bubble-time">${m.time}</div>
+    </div>`).join('');
+  body.scrollTop = body.scrollHeight;
+}
+
+async function sendMsg() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text || !App.activeThreadUserId) return;
+  const msg = {
+    id: 'msg-' + Date.now(),
+    from_id: App.currentUser.id,
+    to_id: App.activeThreadUserId,
+    text,
+    time: new Date().toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' }),
+    created_at: Date.now(),
+    read: false,
+  };
+  await dbCreateMessage(msg);
+  input.value = '';
+  renderChatWith(App.activeThreadUserId);
+  renderThreads();
+}
+
+// ════════════════════════════════════════════════
+// CONTACT MODAL
+// ════════════════════════════════════════════════
+let _contactModalData = null;
+
+async function showFarmerContact(prodId) {
+  const products = await getProductsCache();
+  const prod = products.find(p => p.id === prodId);
+  if (!prod) return;
+  _contactModalData = { userId: prod.farmer_id, name: prod.farmer_name, role: 'Farmer', phone: prod.farmer_phone, email: prod.farmer_email };
+  populateContactModal();
+  document.getElementById('contact-modal').classList.add('open');
+}
+
+async function showContactModal() {
+  const uid = App.activeThreadUserId;
+  if (!uid) return;
+  const users = await dbGetUsers();
+  const user = users.find(u => u.id === uid);
+  if (!user) return;
+  _contactModalData = { userId: uid, name: user.name, role: user.role, phone: user.phone, email: user.email };
+  populateContactModal();
+  document.getElementById('contact-modal').classList.add('open');
+}
+
+function populateContactModal() {
+  const d = _contactModalData;
+  document.getElementById('cmodal-name').textContent = d.name;
+  document.getElementById('cmodal-role').textContent = d.role.charAt(0).toUpperCase() + d.role.slice(1);
+  const callEl = document.getElementById('cmodal-call');
+  callEl.href = 'tel:' + (d.phone||'').replace(/\s/g,'');
+  callEl.textContent = d.phone || 'Not provided';
+  const smsEl = document.getElementById('cmodal-sms');
+  smsEl.href = 'sms:' + (d.phone||'').replace(/\s/g,'');
+  smsEl.textContent = d.phone || 'Not provided';
+  const emailEl = document.getElementById('cmodal-email');
+  emailEl.href = 'mailto:' + d.email;
+  emailEl.textContent = d.email;
+}
+
+function closeContactModal() { document.getElementById('contact-modal').classList.remove('open'); }
+function openMsgFromContactModal() {
+  closeContactModal();
+  if (_contactModalData) msgUser(_contactModalData.userId, _contactModalData.name);
+}
+
+// ════════════════════════════════════════════════
+// ADMIN
+// ════════════════════════════════════════════════
+async function renderAdmin() {
+  const [allOrders, allUsers, allProducts] = await Promise.all([
+    dbGetOrders(), dbGetUsers(), dbGetProducts()
+  ]);
+  const totalRevenue = allOrders.reduce((a,o) => a + Number(o.total), 0);
+  const totalCommission = allOrders.reduce((a,o) => a + Number(o.commission), 0);
+  const farmers = allUsers.filter(u => u.role === 'farmer').length;
+  const consumers = allUsers.filter(u => u.role === 'consumer').length;
+
+  document.getElementById('admin-stats').innerHTML = [
+    { label:'Total Orders', value: allOrders.length, sub:'All time' },
+    { label:'Total Revenue', value: '₱'+totalRevenue.toFixed(0), sub:'Gross sales' },
+    { label:'Platform Commission', value: '₱'+totalCommission.toFixed(0), sub:'10% of sales' },
+    { label:'Farmers', value: farmers, sub:'Registered' },
+    { label:'Consumers', value: consumers, sub:'Registered' },
+    { label:'Products Listed', value: allProducts.length, sub:'Active listings' },
+  ].map(s => `
+    <div class="stat-card">
+      <div class="stat-label">${s.label}</div>
+      <div class="stat-value">${s.value}</div>
+      <div class="stat-sub">${s.sub}</div>
+    </div>`).join('');
+
+  document.getElementById('admin-tbody').innerHTML = allOrders.length
+    ? allOrders.map(o => `
+        <tr>
+          <td class="td-bold">${o.id}</td>
+          <td>${o.consumer_name}</td>
+          <td>${o.farmer_name}</td>
+          <td>${(typeof o.items === 'string' ? JSON.parse(o.items) : o.items).map(i=>i.name).join(', ')}</td>
+          <td class="td-bold">₱${Number(o.total).toFixed(2)}</td>
+          <td style="color:var(--sage);font-weight:600">₱${Number(o.commission).toFixed(2)}</td>
+          <td><span class="order-status status-${o.status}">${o.status}</span></td>
+          <td>${o.date}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-ghost)">No orders yet</td></tr>`;
+}
+
+// ════════════════════════════════════════════════
+// PROFILE
+// ════════════════════════════════════════════════
+function renderProfile() {
+  if (!App.currentUser) return;
+  const u = App.currentUser;
+  document.getElementById('profile-avatar-big').textContent = u.name.charAt(0).toUpperCase();
+  document.getElementById('profile-name-display').textContent = u.name;
+  document.getElementById('profile-role-display').textContent = u.role.charAt(0).toUpperCase() + u.role.slice(1);
+  document.getElementById('profile-name-field').value = u.name;
+  document.getElementById('profile-email-field').value = u.email;
+  document.getElementById('profile-phone-field').value = u.phone || '';
+  document.getElementById('profile-address-field').value = u.address || '';
+  // Hide the required tag if address already set
+  const reqTag = document.getElementById('address-required-tag');
+  if (reqTag) reqTag.style.display = (u.address && u.address.trim().length > 3) ? 'none' : '';
+}
+
+async function saveProfile() {
+  if (!App.currentUser) return;
+  const name = document.getElementById('profile-name-field').value.trim() || App.currentUser.name;
+  const phone = document.getElementById('profile-phone-field').value.trim();
+  const address = document.getElementById('profile-address-field').value.trim();
+  const updates = { name, phone, address };
+  await dbUpdateUser(App.currentUser.id, updates);
+  Object.assign(App.currentUser, updates);
+  document.getElementById('profile-name-display').textContent = name;
+  document.getElementById('profile-avatar-big').textContent = name.charAt(0).toUpperCase();
+  document.getElementById('avatar-btn').textContent = name.charAt(0).toUpperCase();
+  const reqTag = document.getElementById('address-required-tag');
+  if (reqTag) reqTag.style.display = (address && address.length > 3) ? 'none' : '';
+  showToast('Profile updated ✓');
+}
+
+// ════════════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════════════
+let _toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ════════════════════════════════════════════════
+// START
+// ════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
